@@ -59,8 +59,10 @@ import {
   useUpdateProfile,
 } from "../../hooks/useQueries";
 import { AppSettingsSheet } from "../AppSettingsSheet";
+import BirthdayBanner from "../BirthdayBanner";
 import FollowListSheet from "../FollowListSheet";
 import GiftSheet from "../GiftSheet";
+import MoodBoardSection from "../MoodBoardSection";
 import { PremiumScreen } from "../PremiumScreen";
 
 const MOODS = ["😊", "🎉", "❤️", "🔥", "😴"];
@@ -286,6 +288,9 @@ export default function ProfileTab() {
           )}
         </div>
 
+        {/* Birthday banner */}
+        <BirthdayBanner birthday={profile?.birthday} />
+
         {/* Extended profile info display */}
         <ExtendedProfileInfo profile={profile ?? null} />
 
@@ -455,6 +460,9 @@ export default function ProfileTab() {
 
         {/* Story Highlights */}
         <StoryHighlightsSection myPrincipal={myPrincipal} />
+
+        {/* Mood Board */}
+        <MoodBoardSection />
 
         {/* Action buttons row */}
         <div className="flex gap-2 mt-4">

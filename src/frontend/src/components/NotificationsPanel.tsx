@@ -5,6 +5,7 @@ import {
   Bell,
   BellOff,
   Check,
+  Eye,
   Heart,
   MessageCircle,
   Phone,
@@ -16,11 +17,13 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import type { Notification } from "../backend";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useGetNotifications,
   useGetUserProfile,
   useMarkNotificationsRead,
 } from "../hooks/useQueries";
+import { ProfileVisitBanner } from "./ProfileVisitTracker";
 
 type FilterChip =
   | "all"
@@ -30,7 +33,8 @@ type FilterChip =
   | "matches"
   | "calls"
   | "thanks"
-  | "stars";
+  | "stars"
+  | "viewed";
 
 const FILTER_CHIPS: { id: FilterChip; label: string }[] = [
   { id: "all", label: "All" },
@@ -41,6 +45,7 @@ const FILTER_CHIPS: { id: FilterChip; label: string }[] = [
   { id: "calls", label: "Calls" },
   { id: "thanks", label: "Thanks" },
   { id: "stars", label: "Stars" },
+  { id: "viewed", label: "👁️ Viewed Me" },
 ];
 
 const FILTER_KINDS: Record<FilterChip, string[]> = {
@@ -52,6 +57,7 @@ const FILTER_KINDS: Record<FilterChip, string[]> = {
   calls: ["call"],
   thanks: ["thanks"],
   stars: ["star", "like"],
+  viewed: [],
 };
 
 interface Props {
@@ -68,13 +74,15 @@ export default function NotificationsPanel({
   const { data: notifications, isLoading } = useGetNotifications();
   const markRead = useMarkNotificationsRead();
   const [activeFilter, setActiveFilter] = useState<FilterChip>("all");
+  const { identity } = useInternetIdentity();
+  const myPrincipal = identity?.getPrincipal()?.toString() ?? "";
 
   const handleMarkAllRead = () => {
     markRead.mutate();
   };
 
   const filteredNotifications = (notifications ?? []).filter((n) => {
-    if (activeFilter === "all") return true;
+    if (activeFilter === "all" || activeFilter === "viewed") return true;
     const kinds = FILTER_KINDS[activeFilter];
     return kinds.includes(n.kind);
   });
@@ -101,7 +109,6 @@ export default function NotificationsPanel({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.85 }}
             transition={{
-              duration: 0.22,
               type: "spring",
               damping: 22,
               stiffness: 300,
@@ -159,7 +166,17 @@ export default function NotificationsPanel({
 
               {/* List */}
               <div className="flex-1 overflow-y-auto">
-                {isLoading ? (
+                {activeFilter === "viewed" ? (
+                  <div className="px-3">
+                    <div className="flex items-center gap-2 py-3">
+                      <Eye className="w-4 h-4 text-purple-400" />
+                      <p className="text-white/60 text-sm font-semibold">
+                        Who viewed your profile
+                      </p>
+                    </div>
+                    <ProfileVisitBanner myPrincipal={myPrincipal} />
+                  </div>
+                ) : isLoading ? (
                   <div
                     data-ocid="notifications.loading_state"
                     className="p-4 flex flex-col gap-3"
@@ -321,9 +338,9 @@ function NotificationItem({
           {getIcon()}
         </div>
       </div>
-      <div className="flex flex-col flex-1 min-w-0">
-        <p className="text-sm text-white/80 leading-snug">{getText()}</p>
-        <p className="text-xs text-white/30 mt-0.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm leading-tight">{getText()}</p>
+        <p className="text-white/30 text-xs mt-0.5">
           {formatTs(notification.timestamp)}
         </p>
       </div>

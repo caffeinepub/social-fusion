@@ -23,9 +23,12 @@ import {
   useTinderLike,
   useTinderPass,
 } from "../../hooks/useQueries";
+import CompatibilityRing from "../CompatibilityRing";
 import LiveBroadcastScreen from "../LiveBroadcastScreen";
 import ProfileBadges from "../ProfileBadges";
+import QuickMatchBar from "../QuickMatchBar";
 import SearchScreen from "../SearchScreen";
+import SpotlightSection from "../SpotlightSection";
 import StoryCreatorSheet from "../StoryCreatorSheet";
 import StoryViewer from "../StoryViewer";
 
@@ -498,6 +501,10 @@ export default function DiscoverTab({
         );
       })()}
 
+      <SpotlightSection
+        profiles={allProfiles ?? []}
+        onUserClick={onUserClick}
+      />
       {/* Swipe section + Quick Reactions */}
       <div className="flex-1 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-hidden">
@@ -1044,17 +1051,7 @@ function TinderSection({
                 {prof.displayName}
               </h3>
               <div className="flex items-center gap-1.5">
-                {matchPct > 0 && (
-                  <span
-                    className="text-xs font-bold px-2 py-0.5 rounded-full"
-                    style={{
-                      background: "linear-gradient(90deg, #ec4899, #a855f7)",
-                      color: "white",
-                    }}
-                  >
-                    {matchPct}% Match
-                  </span>
-                )}
+                {matchPct > 0 && <CompatibilityRing pct={matchPct} size={40} />}
                 <ProfileBadges principalStr={current.principalStr} />
               </div>
             </div>
@@ -1091,8 +1088,17 @@ function TinderSection({
         </div>
       </motion.div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-4">
+      {/* Quick Match Actions Bar */}
+      <QuickMatchBar
+        onPass={handlePass}
+        onUndo={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+        onSuperLike={async () => {
+          handleLike();
+        }}
+        onBoost={() => {}}
+      />
+      {/* Action buttons (legacy) - hidden */}
+      <div className="hidden flex items-center gap-4">
         <button
           type="button"
           data-ocid="discover.delete_button"

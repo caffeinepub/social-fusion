@@ -37,6 +37,8 @@ import {
 } from "../../hooks/useQueries";
 import CallHistoryScreen from "../CallHistoryScreen";
 import CallScreen from "../CallScreen";
+import GifPicker from "../GifPicker";
+import IcebreakerCard, { getRandomIcebreaker } from "../IcebreakerCard";
 import IncomingCallOverlay from "../IncomingCallOverlay";
 import LoveTrackScreen from "../LoveTrackScreen";
 import OutgoingCallOverlay from "../OutgoingCallOverlay";
@@ -723,6 +725,17 @@ function ConversationView({
   const [chatTheme, setChatTheme] = useState(CHAT_THEMES[0]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiTab, setEmojiTab] = useState<"emoji" | "sticker">("emoji");
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showMsgSearch, setShowMsgSearch] = useState(false);
+  const [msgSearchQuery, setMsgSearchQuery] = useState("");
+  const [pinnedMsg, setPinnedMsg] = useState<string | null>(null);
+  const [_disappearing, _setDisappearing] = useState<"off" | "24h" | "7d">(
+    "off",
+  );
+  const [forwardMsg, setForwardMsg] = useState<string | null>(null);
+  const [showForwardSheet, setShowForwardSheet] = useState(false);
+  const [icebreaker] = useState(() => getRandomIcebreaker());
+  const showIcebreaker = true;
   const [filePreview, setFilePreview] = useState<{
     url: string;
     name: string;
@@ -970,7 +983,49 @@ function ConversationView({
         >
           <Video className="w-4 h-4 text-white" />
         </button>
+        <button
+          type="button"
+          data-ocid="messages.toggle"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowMsgSearch((v) => !v);
+          }}
+          className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+          title="Search messages"
+        >
+          <Search className="w-4 h-4 text-white/70" />
+        </button>
       </div>
+
+      {/* Message search overlay */}
+      {showMsgSearch && (
+        <div className="px-3 py-2 border-b border-white/5 shrink-0">
+          <input
+            data-ocid="messages.search_input"
+            value={msgSearchQuery}
+            onChange={(e) => setMsgSearchQuery(e.target.value)}
+            placeholder="Search messages..."
+            className="w-full bg-white/10 text-white placeholder:text-white/30 rounded-full px-4 py-2 text-sm outline-none border border-white/10 focus:border-purple-500/50"
+          />
+        </div>
+      )}
+
+      {/* Pinned message banner */}
+      {pinnedMsg && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/20 shrink-0">
+          <span className="text-sm">📌</span>
+          <p className="flex-1 text-yellow-200/80 text-xs truncate">
+            {pinnedMsg}
+          </p>
+          <button
+            type="button"
+            onClick={() => setPinnedMsg(null)}
+            className="text-white/30 text-sm"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col-reverse gap-2">
@@ -998,87 +1053,101 @@ function ConversationView({
             <Loader2 className="w-6 h-6 animate-spin text-white/30" />
           </div>
         ) : messages && messages.length > 0 ? (
-          [...messages].reverse().map((msg, i) => {
-            const isMe = msg.from.toString() === myPrincipal?.toString();
-            const reaction = reactions.find((r) => r.msgIndex === i);
-            return (
-              <div
-                key={msg.timestamp.toString() + String(i)}
-                data-ocid={`messages.row.${i + 1}`}
-                className={`flex flex-col ${
-                  isMe ? "items-end" : "items-start"
-                } gap-0.5`}
-              >
+          [...messages]
+            .reverse()
+            .filter(
+              (msg) =>
+                !msgSearchQuery.trim() ||
+                msg.content
+                  .toLowerCase()
+                  .includes(msgSearchQuery.toLowerCase()),
+            )
+            .map((msg, i) => {
+              const isMe = msg.from.toString() === myPrincipal?.toString();
+              const reaction = reactions.find((r) => r.msgIndex === i);
+              return (
                 <div
-                  className={`flex items-end gap-2 ${
-                    isMe ? "justify-end" : "justify-start"
-                  }`}
+                  key={msg.timestamp.toString() + String(i)}
+                  data-ocid={`messages.row.${i + 1}`}
+                  className={`flex flex-col ${
+                    isMe ? "items-end" : "items-start"
+                  } gap-0.5`}
                 >
-                  {!isMe && (
-                    <button
-                      type="button"
-                      className="shrink-0 mb-1"
-                      onClick={() => onViewProfile?.(otherUser)}
-                      title={`View ${otherProfile.displayName}'s profile`}
-                    >
-                      <Avatar className="w-6 h-6">
-                        {otherProfile.avatar && (
-                          <AvatarImage
-                            src={otherProfile.avatar.getDirectURL()}
-                          />
-                        )}
-                        <AvatarFallback className="bg-purple-600 text-white text-[10px]">
-                          {otherProfile.displayName[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </button>
-                  )}
                   <div
-                    className={`relative max-w-[72%] px-3.5 py-2 rounded-2xl text-sm cursor-pointer select-none ${
-                      isMe
-                        ? "bg-gradient-to-br from-purple-600 to-violet-500 text-white rounded-br-sm"
-                        : "bg-white/10 text-white rounded-bl-sm"
+                    className={`flex items-end gap-2 ${
+                      isMe ? "justify-end" : "justify-start"
                     }`}
-                    onContextMenu={(e) => handleLongPress(e, i)}
-                    onDoubleClick={(e) => handleLongPress(e, i)}
                   >
-                    <p>{msg.content}</p>
-                    <p
-                      className={`text-[10px] mt-0.5 ${
-                        isMe ? "text-white/50" : "text-white/30"
+                    {!isMe && (
+                      <button
+                        type="button"
+                        className="shrink-0 mb-1"
+                        onClick={() => onViewProfile?.(otherUser)}
+                        title={`View ${otherProfile.displayName}'s profile`}
+                      >
+                        <Avatar className="w-6 h-6">
+                          {otherProfile.avatar && (
+                            <AvatarImage
+                              src={otherProfile.avatar.getDirectURL()}
+                            />
+                          )}
+                          <AvatarFallback className="bg-purple-600 text-white text-[10px]">
+                            {otherProfile.displayName[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    )}
+                    <div
+                      className={`relative max-w-[72%] px-3.5 py-2 rounded-2xl text-sm cursor-pointer select-none ${
+                        isMe
+                          ? "bg-gradient-to-br from-purple-600 to-violet-500 text-white rounded-br-sm"
+                          : "bg-white/10 text-white rounded-bl-sm"
+                      }`}
+                      onContextMenu={(e) => handleLongPress(e, i)}
+                      onDoubleClick={(e) => handleLongPress(e, i)}
+                    >
+                      <p>{msg.content}</p>
+                      <p
+                        className={`text-[10px] mt-0.5 ${
+                          isMe ? "text-white/50" : "text-white/30"
+                        }`}
+                      >
+                        {formatTs(msg.timestamp)}
+                      </p>
+                    </div>
+                    {isMe && (
+                      <span
+                        className={`text-[10px] ${readMessages.has(msg.timestamp.toString()) ? "text-pink-400" : "text-white/30"}`}
+                      >
+                        {readMessages.has(msg.timestamp.toString())
+                          ? "✓✓"
+                          : "✓"}
+                      </span>
+                    )}
+                  </div>
+                  {reaction && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className={`text-sm bg-white/10 rounded-full px-2 py-0.5 border border-white/10 ${
+                        isMe ? "mr-2" : "ml-8"
                       }`}
                     >
-                      {formatTs(msg.timestamp)}
-                    </p>
-                  </div>
-                  {isMe && (
-                    <span
-                      className={`text-[10px] ${readMessages.has(msg.timestamp.toString()) ? "text-pink-400" : "text-white/30"}`}
-                    >
-                      {readMessages.has(msg.timestamp.toString()) ? "✓✓" : "✓"}
-                    </span>
+                      {reaction.emoji}
+                    </motion.div>
                   )}
                 </div>
-                {reaction && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className={`text-sm bg-white/10 rounded-full px-2 py-0.5 border border-white/10 ${
-                      isMe ? "mr-2" : "ml-8"
-                    }`}
-                  >
-                    {reaction.emoji}
-                  </motion.div>
-                )}
-              </div>
-            );
-          })
+              );
+            })
         ) : (
           <div
             data-ocid="messages.empty_state"
             className="flex flex-col items-center justify-center py-8 text-center gap-4"
           >
             <p className="text-white/30 text-sm">No messages yet. Say hi! 👋</p>
+            {isEmptyChat && showIcebreaker && (
+              <IcebreakerCard question={icebreaker} />
+            )}
             {isEmptyChat && (
               <div className="flex flex-wrap gap-2 justify-center">
                 {quickReplies.map((reply) => (
@@ -1122,6 +1191,36 @@ function ConversationView({
                 {emoji}
               </button>
             ))}
+            <div className="w-px bg-white/10 mx-1 self-stretch" />
+            <button
+              type="button"
+              onClick={() => {
+                const msgs = messages ? [...messages].reverse() : [];
+                const msg = msgs[contextMenu.msgIndex];
+                if (msg) setPinnedMsg(msg.content);
+                setContextMenu(null);
+              }}
+              className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-lg transition-colors active:scale-90"
+              title="Pin"
+            >
+              📌
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const msgs = messages ? [...messages].reverse() : [];
+                const msg = msgs[contextMenu.msgIndex];
+                if (msg) {
+                  setForwardMsg(msg.content);
+                  setShowForwardSheet(true);
+                }
+                setContextMenu(null);
+              }}
+              className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-lg transition-colors active:scale-90"
+              title="Forward"
+            >
+              ↗️
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1345,7 +1444,20 @@ function ConversationView({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            setShowGifPicker((v) => !v);
+            setShowEmojiPicker(false);
+          }}
+          className={`w-8 h-8 flex items-center justify-center shrink-0 transition-colors text-[16px] ${showGifPicker ? "opacity-100" : "opacity-40"}`}
+          title="GIF"
+        >
+          🎬
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
             setShowEmojiPicker((v) => !v);
+            setShowGifPicker(false);
           }}
           className={`w-8 h-8 flex items-center justify-center shrink-0 transition-colors ${showEmojiPicker ? "text-purple-400" : "text-white/40"}`}
         >
@@ -1415,6 +1527,58 @@ function ConversationView({
           />
         )}
       </AnimatePresence>
+
+      {/* GIF Picker */}
+      <GifPicker
+        open={showGifPicker}
+        onClose={() => setShowGifPicker(false)}
+        onSelect={async (gifText) => {
+          try {
+            await sendMessage.mutateAsync({ to: otherUser, content: gifText });
+          } catch {}
+        }}
+      />
+
+      {/* Forward Message Sheet */}
+      {showForwardSheet && forwardMsg && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowForwardSheet(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setShowForwardSheet(false);
+            }}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close"
+          />
+          <div className="relative w-full bg-[#1a1a2e] rounded-t-3xl p-4 max-h-[60dvh] overflow-y-auto">
+            <p className="text-white font-bold mb-3">Forward message to...</p>
+            <p className="text-white/50 text-sm mb-4 bg-white/5 p-3 rounded-xl italic">
+              "{forwardMsg}"
+            </p>
+            <button
+              type="button"
+              data-ocid="messages.confirm_button"
+              onClick={async () => {
+                try {
+                  await sendMessage.mutateAsync({
+                    to: otherUser,
+                    content: `↗️ Forwarded: ${forwardMsg}`,
+                  });
+                } catch {}
+                setShowForwardSheet(false);
+              }}
+              className="w-full py-3 rounded-2xl text-white font-semibold"
+              style={{
+                background: "linear-gradient(135deg, #ec4899, #a855f7)",
+              }}
+            >
+              Forward Here
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

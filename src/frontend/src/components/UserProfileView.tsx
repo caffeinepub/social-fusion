@@ -37,6 +37,7 @@ import GiftSheet from "./GiftSheet";
 import IncomingCallOverlay from "./IncomingCallOverlay";
 import OutgoingCallOverlay from "./OutgoingCallOverlay";
 import ProfileBadges from "./ProfileBadges";
+import { useProfileVisit } from "./ProfileVisitTracker";
 
 interface Props {
   principal: Principal;
@@ -90,6 +91,14 @@ export default function UserProfileView({
       }
     } catch {}
   }, []);
+
+  // Track profile visit
+  useProfileVisit(
+    principal.toString(),
+    myPrincipal?.toString(),
+    profile?.displayName ?? "Unknown",
+    profile?.avatar?.getDirectURL(),
+  );
 
   const isMe = myPrincipal?.toString() === principal.toString();
   const isFollowing =

@@ -1,40 +1,64 @@
-# Social Fusion v21
+# Social Fusion v22
 
 ## Current State
-v20 is live with: story viewer, today's picks auto-scroll, post creation/deletion, profile grid borders, theme switching (7 themes), profile privacy toggle, enhanced chat (voice messages, stickers, file preview, avatar-to-profile), chat settings, search with filter sheet, filterable notifications, discover carousel + quick reactions, recommendation sorting, animated profile page, 5-step onboarding stepper, premium trial card, Love Track animation.
+Social Fusion is a full-stack matrimonial/social app at v21 with: stories, reels, posts, Discover with carousels, Love Track animation, real-time chat, WebRTC calls, premium plans, 10 themes, onboarding stepper, recommendation system, profile privacy, animated profile page, notification filtering, chat settings, voice messages, stickers, emoji library, and more.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Theme: apply selected theme CSS variables instantly across ALL UI components; persist to localStorage; survive reload
-- Privacy: filter private profiles out of Discover, Search results, and Recommendations at the UI layer
-- Chat: file/image/video preview before send; emoji + sticker panel; voice message recording; avatar tap → profile; call ring tone on initiation; incoming call overlay (accept/reject) → WebRTC audio/video
-- Chat settings: message request accept/delete; block user; who-can controls (send messages, see online status, send requests, search chats); stars viewer list; thanks/gifts viewer; reply to thanks
-- Search: search icon expands inline row with input + filter icon; filter icon opens bottom sheet modal
-- Notifications: mark-all-read button; "Show all" view with filter tabs: Comments, Replies, Requests, Matches, Calls, Thanks, Stars
-- Discover: fast load (parallel fetch), auto-sliding image carousel per card, quick reaction buttons: Star, Heart, Kiss, Miss you, Thanks
-- Premium: Free vs Premium account types; Premium unlocks verification badge, 10+ customization styles, stylish layouts, carousel uploads, profile boost
-- Recommendations: sort/filter by opposite gender, location, qualification, interests, favorites, profile views, behavior
-- Profile page: animated thoughts ticker, floating hobby bubbles animation, image+video carousel, premium badge, boost indicator
-- Onboarding: 5-step stepper for new users; 2-month premium trial auto-activated on first profile save
+1. **Status / Away Message** — Users can set a short custom status text (e.g. "Looking for soulmate") shown under their avatar in chat list and profile.
+2. **Message Reactions** — Long-press a chat message to react with emoji (❤️ 😂 👍 😮 😢 🙏). Reactions shown as small bubbles under the message.
+3. **Pinned Messages** — Pin important messages in a chat; a pinned banner appears at the top of the conversation.
+4. **Chat Themes** — Each individual conversation can have its own color/gradient theme picked from a palette.
+5. **Typing Indicator** — Animated 3-dot bubble shows when the other user is typing.
+6. **Message Search** — Search bar inside a chat to find messages by keyword.
+7. **Disappearing Messages** — Toggle per-chat to auto-delete messages after 24h / 7d / off.
+8. **Profile Spotlight** — A featured "Spotlight" banner on the Browse screen that rotates premium profiles with a glow effect.
+9. **Compatibility Score Ring** — Animated circular ring on swipe cards and profile view showing % compatibility with color gradient.
+10. **Icebreaker Questions** — When two users match, a randomly selected icebreaker question is shown in the chat as the opening message.
+11. **Profile Completion Meter** — Progress bar on profile page showing how complete the profile is (0–100%); tapping shows what's missing.
+12. **Story Reactions** — Swipe up on a story to send a quick emoji reaction that appears as a floating animation.
+13. **Mutual Friends / Connections** — On a profile view, show "X mutual connections" with avatars.
+14. **Live Availability Badge** — Green dot with "Available now" badge for users actively online; shown in Discover and chat list.
+15. **Mood Board** — A 3x3 image grid on the profile page where users can pin photos that represent their personality/lifestyle.
+16. **Anniversary / Special Dates** — Users can add important dates (e.g. birthday); reminder badge shown on their profile on that date.
+17. **Voice Note Transcription** — Voice messages show an auto-transcribed text preview below the waveform.
+18. **Chat GIF Search** — A GIF picker (using a local curated set) in the chat input toolbar.
+19. **Profile Visit Notifications** — Notify the user when someone views their profile; show a "Who viewed me" list in notifications.
+20. **Quick Match Actions Bar** — Floating action bar on the Browse/Discover screen with: Super Like (⭐), Boost (🚀), Undo (↩️), and Skip (✕) buttons with animated press feedback.
+21. **Dark/Light Mode Quick Toggle** — Floating moon/sun toggle button accessible from any screen for instant dark/light switch.
+22. **Chat Forward Message** — Long-press a message to forward it to another conversation.
 
 ### Modify
-- All existing features remain intact; enhancements are additive only
-- Theme context applies tokens to all components (not just a few)
-- Profile privacy context filters at data-display layer
+- Chat input toolbar: add GIF button alongside existing emoji/sticker/voice buttons.
+- Notification panel: add "Profile Views" filter tab.
+- Profile page: add Mood Board grid section, Profile Completion Meter, Special Dates section.
+- Browse/Discover: add Profile Spotlight banner at top, Compatibility Score Ring on cards, Quick Match Actions Bar.
+- Story viewer: add swipe-up reaction animation.
 
 ### Remove
-- Nothing
+- Nothing removed.
 
 ## Implementation Plan
-1. Strengthen ThemeContext so CSS variables cover all background, text, border, card, input, and button tokens — all components read from these variables
-2. Strengthen PrivacyContext to filter private profiles from Discover, Search, and Recommendations
-3. Chat enhancements: file preview modal before send, full emoji+sticker panel, voice recorder UI, avatar-click handler, call ring audio, incoming/outgoing call overlay
-4. Chat settings panel: message requests list, block user action, who-can privacy toggles, stars list, thanks/gifts list with reply
-5. Search bar: collapsed icon → expanded row with input + filter icon; filter bottom sheet
-6. Notifications: mark-all-read, show-all sheet with 7 filter tabs
-7. Discover: parallel profile fetch, per-card auto-sliding carousel, 5 quick reaction buttons
-8. Premium: account type field, premium feature gates, 10+ layout/style options, boost toggle
-9. Recommendations: scoring algorithm using gender, location, qualification, interests, views
-10. Profile page: animated ticker for thoughts, CSS keyframe floating bubbles, image/video carousel
-11. Onboarding stepper: 5 steps, auto-activate 2-month trial on completion
+1. Add `userStatus` field to profile store; render in chat list row and profile header.
+2. Build `MessageReactionPicker` component (emoji popover on long-press); store reactions in message objects.
+3. Add `pinnedMessageId` per conversation; pinned banner in chat header.
+4. `ChatThemePicker` — palette sheet, store per-conversation theme in local state.
+5. Typing indicator: set/clear a `isTyping` flag on input focus/keystroke; render animated dots in chat.
+6. `MessageSearch` overlay inside chat — filter messages array by keyword.
+7. Disappearing messages toggle in chat settings; messages with expiry timestamp auto-removed on render.
+8. `ProfileSpotlight` carousel at top of Browse — rotating premium cards with glow pulse animation.
+9. `CompatibilityRing` SVG circle with animated stroke-dashoffset; color gradient green→pink by score.
+10. Icebreaker question injected as first system message on new match.
+11. `ProfileCompletionMeter` — count filled fields / total; progress bar + missing field chips.
+12. Story swipe-up reaction — touch handler, floating emoji animation overlay.
+13. `MutualConnections` — intersect followers arrays; show avatars + count on profile.
+14. `LiveBadge` — online timestamp < 5min shows green "Available now" pill.
+15. `MoodBoard` — 3x3 upload grid in profile edit + display section.
+16. Special Dates field in profile edit; birthday badge logic.
+17. Voice note transcription placeholder text (simulated) below waveform in chat bubbles.
+18. `GifPicker` component with curated local GIF set; sends as image message.
+19. Profile view tracking — record viewer in backend; "Who viewed me" section in notifications.
+20. `QuickMatchBar` floating row at bottom of swipe card stack with Super Like/Boost/Undo/Skip.
+21. Floating dark/light toggle FAB using existing theme system.
+22. Forward message: long-press menu option → conversation picker sheet → sends copy.

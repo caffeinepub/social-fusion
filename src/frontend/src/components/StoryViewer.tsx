@@ -43,6 +43,10 @@ export default function StoryViewer({
   const [saved, setSaved] = useState(false);
   const [muted, setMuted] = useState(false);
   const [showCommentSheet, setShowCommentSheet] = useState(false);
+  const [showReactionBurst, setShowReactionBurst] = useState(false);
+  const [floatingEmojis, setFloatingEmojis] = useState<
+    { id: number; emoji: string; x: number }[]
+  >([]);
   const [commentInput, setCommentInput] = useState("");
   const [showMentions, setShowMentions] = useState(false);
   const [allComments, setAllComments] = useState<
@@ -404,6 +408,64 @@ export default function StoryViewer({
                 <MoreHorizontal className="w-6 h-6 text-white" />
                 <span className="text-white/50 text-[9px]">Share</span>
               </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowReactionBurst((v) => !v);
+                  setPaused(true);
+                }}
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+              >
+                <span className="text-xl">😍</span>
+                <span className="text-white/50 text-[9px]">React</span>
+              </button>
+            </div>
+            {/* Reaction burst */}
+            {showReactionBurst && (
+              <div className="absolute bottom-24 left-0 right-0 flex justify-center gap-3 z-10">
+                {["❤️", "😂", "😮", "🔥", "😍", "🙏"].map((emoji, i) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const id = Date.now() + i;
+                      setFloatingEmojis((prev) => [
+                        ...prev,
+                        { id, emoji, x: (Math.random() - 0.5) * 80 },
+                      ]);
+                      setTimeout(
+                        () =>
+                          setFloatingEmojis((prev) =>
+                            prev.filter((f) => f.id !== id),
+                          ),
+                        1500,
+                      );
+                      setShowReactionBurst(false);
+                      setPaused(false);
+                    }}
+                    className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-xl active:scale-90 transition-transform"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Floating emojis */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              {floatingEmojis.map((f) => (
+                <div
+                  key={f.id}
+                  className="absolute bottom-20 text-3xl"
+                  style={{
+                    left: `calc(50% + ${f.x}px)`,
+                    animation: "floatUp 1.5s ease-out forwards",
+                  }}
+                >
+                  {f.emoji}
+                </div>
+              ))}
             </div>
           </div>
         </div>

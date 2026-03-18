@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import CallScreen from "./components/CallScreen";
+import DarkModeFAB from "./components/DarkModeFAB";
 import IncomingCallOverlay from "./components/IncomingCallOverlay";
 import LoginScreen from "./components/LoginScreen";
 import NotificationsPanel from "./components/NotificationsPanel";
@@ -258,6 +259,7 @@ function MainApp() {
         }}
       />
 
+      <DarkModeFAB />
       {incomingCall && (
         <IncomingCallOverlay
           profile={(() => {
