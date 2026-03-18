@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
   useAcceptRequest,
+  useBlockedUsers,
   useGetAllProfiles,
   useTinderPass,
 } from "../../hooks/useQueries";
@@ -24,6 +25,7 @@ export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
   const myPrincipal = identity?.getPrincipal();
   const acceptRequest = useAcceptRequest();
   const tinderPass = useTinderPass();
+  const { blockedSet } = useBlockedUsers();
   const [callingUser, setCallingUser] = useState<{ name: string } | null>(null);
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
   const [declinedIds, setDeclinedIds] = useState<Set<string>>(new Set());
@@ -34,7 +36,8 @@ export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
       ([p]) =>
         p.toString() !== myPrincipal?.toString() &&
         !acceptedIds.has(p.toString()) &&
-        !declinedIds.has(p.toString()),
+        !declinedIds.has(p.toString()) &&
+        !blockedSet.has(p.toString()),
     ) ?? [];
 
   const handleAccept = async (principal: Principal) => {

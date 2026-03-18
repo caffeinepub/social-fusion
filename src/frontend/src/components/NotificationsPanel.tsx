@@ -1,5 +1,4 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
 import {
@@ -8,6 +7,7 @@ import {
   Check,
   Heart,
   MessageCircle,
+  UserCheck,
   UserPlus,
   X,
 } from "lucide-react";
@@ -156,7 +156,7 @@ function NotificationItem({
   onProfileClick?: (principal: Principal) => void;
   onClose: () => void;
 }) {
-  const { data: fromProfile } = useGetUserProfile(
+  const { data: fromProfile, isLoading: profileLoading } = useGetUserProfile(
     notification.fromUser as Principal,
   );
 
@@ -170,6 +170,8 @@ function NotificationItem({
         return <MessageCircle className="w-3.5 h-3.5 text-green-400" />;
       case "match":
         return <Heart className="w-3.5 h-3.5 text-pink-400" />;
+      case "friend_accept":
+        return <UserCheck className="w-3.5 h-3.5 text-emerald-400" />;
       default:
         return <Bell className="w-3.5 h-3.5 text-white/40" />;
     }
@@ -186,6 +188,8 @@ function NotificationItem({
         return `${name} commented on your post`;
       case "match":
         return `You matched with ${name}! 💕`;
+      case "friend_accept":
+        return `${name} accepted your friend request 🎉`;
       default:
         return `${name} sent you a notification`;
     }
@@ -217,14 +221,18 @@ function NotificationItem({
       }`}
     >
       <div className="relative shrink-0">
-        <Avatar className="w-10 h-10">
-          {fromProfile?.avatar && (
-            <AvatarImage src={fromProfile.avatar.getDirectURL()} />
-          )}
-          <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm">
-            {fromProfile?.displayName?.[0]?.toUpperCase() || "?"}
-          </AvatarFallback>
-        </Avatar>
+        {profileLoading ? (
+          <Skeleton className="w-10 h-10 rounded-full" />
+        ) : (
+          <Avatar className="w-10 h-10">
+            {fromProfile?.avatar && (
+              <AvatarImage src={fromProfile.avatar.getDirectURL()} />
+            )}
+            <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm">
+              {fromProfile?.displayName?.[0]?.toUpperCase() || "?"}
+            </AvatarFallback>
+          </Avatar>
+        )}
         <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#1a1a2e] flex items-center justify-center border border-white/10">
           {getIcon()}
         </div>

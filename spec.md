@@ -1,25 +1,32 @@
-# Social Fusion
+# Social Fusion — Love Track Feature
 
 ## Current State
-Version 6 is fully deployed with all features. Data loads via React Query with staleTime of 30s. Toast notifications (sonner) appear throughout the app on actions. Data fetching starts only after actor is initialized, causing perceived slow loading of profiles.
+MessagesTab has a Star icon button in the header (between Call History and Edit buttons) that has no action. The app has full chat, profile, and social features.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Prefetch critical queries (tinderQueue, allProfiles, notifications, callerProfile) immediately when actor is ready to eliminate loading spinners
+- `LoveTrackScreen.tsx` — Full-page romantic train journey animation screen
+  - Animated train moving along a track with multiple city stops
+  - Location stops: Delhi, Mumbai, Jaipur, Kolkata, Chennai
+  - When train arrives at a stop: love bubbles float up with user profiles
+  - Heart ❤️ / Kiss 💋 floating animations
+  - Love message tags ("Looking for soulmate", "Serious relationship", etc.)
+  - Pause/resume button
+  - Tap bubble to open profile detail
+  - Glow highlight on selected bubble
+  - Auto-loop journey
+- `TrainAnimation.tsx` — Reusable animated train + track component
+- `LoveBubble.tsx` — Reusable floating profile bubble with heart animations
 
 ### Modify
-- Remove `<Toaster>` component from App.tsx so no toast messages appear
-- Replace all `toast.success` and `toast.error` calls with silent no-ops (remove them entirely) across all components
-- Increase staleTime in QueryClient to reduce re-fetches
-- Add prefetching hook that fires all key queries in parallel as soon as actor is available
+- `MessagesTab.tsx` — Replace Star icon with Train icon; wire onClick to open LoveTrackScreen
 
 ### Remove
-- All visible toast/notification pop-ups from the UI
+- Nothing removed
 
 ## Implementation Plan
-1. Remove `<Toaster>` from App.tsx
-2. Remove all `import { toast } from 'sonner'` and `toast.*` calls from every component file
-3. Add a `usePrefetchAll` hook that prefetches tinderQueue, allProfiles, notifications, callerProfile in parallel when actor is ready
-4. Call `usePrefetchAll` in AppInner so data is warm before the user sees any screen
-5. Increase staleTime to 60s in QueryClient config
+1. Create LoveBubble component with CSS keyframe float animation
+2. Create TrainAnimation component with CSS translate animation on track
+3. Create LoveTrackScreen orchestrating journey flow state machine
+4. Update MessagesTab to import Train icon and open LoveTrackScreen

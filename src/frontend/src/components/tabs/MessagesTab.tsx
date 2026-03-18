@@ -18,24 +18,27 @@ import {
   Search,
   Settings,
   SmilePlus,
-  Star,
   ThumbsUp,
+  Train,
   Video,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../backend";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
+  useBlockedUsers,
   useFormatTimestamp,
   useGetAllProfiles,
+  useGetFriends,
   useGetMessages,
   useSendMessage,
 } from "../../hooks/useQueries";
 import CallHistoryScreen from "../CallHistoryScreen";
 import CallScreen from "../CallScreen";
 import IncomingCallOverlay from "../IncomingCallOverlay";
+import LoveTrackScreen from "../LoveTrackScreen";
 import OutgoingCallOverlay from "../OutgoingCallOverlay";
 
 const REACTION_EMOJIS = ["❤️", "🔥", "😂", "😮", "😢", "👏"];
@@ -187,15 +190,32 @@ function ConversationList({
   onSettings: () => void;
 }) {
   const [showNewChatSheet, setShowNewChatSheet] = useState(false);
+  const [showLoveTrack, setShowLoveTrack] = useState(false);
   const { data: profiles, isLoading } = useGetAllProfiles();
+  const { data: friendPrincipals } = useGetFriends();
+  const { blockedSet } = useBlockedUsers();
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
 
+  const friendSet = new Set((friendPrincipals ?? []).map((p) => p.toString()));
+
   const otherUsers =
-    profiles?.filter(([p]) => p.toString() !== myPrincipal?.toString()) ?? [];
+    profiles?.filter(
+      ([p]) =>
+        p.toString() !== myPrincipal?.toString() &&
+        !blockedSet.has(p.toString()),
+    ) ?? [];
+
+  const friendUsers = otherUsers.filter(([p]) => friendSet.has(p.toString()));
+  const otherNonFriends = otherUsers.filter(
+    ([p]) => !friendSet.has(p.toString()),
+  );
 
   return (
     <>
+      {showLoveTrack && (
+        <LoveTrackScreen onClose={() => setShowLoveTrack(false)} />
+      )}
       <div
         data-ocid="messages.page"
         className="flex flex-col h-full bg-[#0a0a0f]"
@@ -225,9 +245,16 @@ function ConversationList({
             </button>
             <button
               type="button"
-              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+              data-ocid="messages.toggle"
+              onClick={() => setShowLoveTrack(true)}
+              className="w-9 h-9 rounded-full flex items-center justify-center border border-pink-500/30"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(168,85,247,0.2))",
+              }}
+              title="Love Track"
             >
-              <Star className="w-4 h-4 text-white/70" />
+              <Train className="w-4 h-4 text-pink-300" />
             </button>
             <button
               type="button"
@@ -327,12 +354,71 @@ function ConversationList({
             </div>
           ) : otherUsers.length > 0 ? (
             <div className="flex flex-col">
-              {otherUsers.map(
+              {friendUsers.length > 0 && (
+                <div className="px-4 pt-3 pb-1">
+                  <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">
+                    Friends & Chats
+                  </p>
+                </div>
+              )}
+              {friendUsers.map(
+                ([principal, profile]: [Principal, Profile], i) => (
+                  <button
+                    key={`friend-${principal.toString()}`}
+                    type="button"
+                    data-ocid={`messages.item.${i + 1}`}
+                    onClick={() => onSelect({ principal, profile })}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                  >
+                    <div className="relative shrink-0">
+                      <div
+                        className="w-13 h-13 rounded-full p-[2px]"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #ec4899, #a855f7)",
+                        }}
+                      >
+                        <Avatar className="w-11 h-11 block">
+                          {profile.avatar && (
+                            <AvatarImage src={profile.avatar.getDirectURL()} />
+                          )}
+                          <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
+                            {profile.displayName[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
+                    </div>
+                    <div className="flex flex-col text-left min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-white text-sm">
+                          {profile.displayName}
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-semibold">
+                          Friend
+                        </span>
+                      </div>
+                      <p className="text-xs text-white/40 truncate">
+                        {profile.bio || "Tap to chat"}
+                      </p>
+                    </div>
+                    <span className="text-white/20 text-xs shrink-0">now</span>
+                  </button>
+                ),
+              )}
+              {otherNonFriends.length > 0 && (
+                <div className="px-4 pt-3 pb-1">
+                  <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">
+                    Discover People
+                  </p>
+                </div>
+              )}
+              {otherNonFriends.map(
                 ([principal, profile]: [Principal, Profile], i) => (
                   <button
                     key={principal.toString()}
                     type="button"
-                    data-ocid={`messages.item.${i + 1}`}
+                    data-ocid={`messages.item.${friendUsers.length + i + 1}`}
                     onClick={() => onSelect({ principal, profile })}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
                   >
@@ -636,6 +722,16 @@ function ConversationView({
     } catch {}
   };
 
+  const [readMessages, setReadMessages] = useState<Set<string>>(new Set());
+  // After 2 seconds, mark all messages as read (simulate read receipt)
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+    const t = setTimeout(() => {
+      setReadMessages(new Set(messages.map((m) => m.timestamp.toString())));
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [messages]);
+
   const quickReplies = [
     "Say hi 👋",
     "You seem interesting...",
@@ -825,6 +921,13 @@ function ConversationView({
                       {formatTs(msg.timestamp)}
                     </p>
                   </div>
+                  {isMe && (
+                    <span
+                      className={`text-[10px] ${readMessages.has(msg.timestamp.toString()) ? "text-pink-400" : "text-white/30"}`}
+                    >
+                      {readMessages.has(msg.timestamp.toString()) ? "✓✓" : "✓"}
+                    </span>
+                  )}
                 </div>
                 {reaction && (
                   <motion.div
@@ -955,6 +1058,38 @@ function ConversationView({
         <span className="text-white/20 text-[10px]">
           Swipe up to turn on vanish mode
         </span>
+      </div>
+
+      {/* Quick Replies bar */}
+      <div className="px-3 pb-1 shrink-0 overflow-x-auto no-scrollbar">
+        <div className="flex gap-2 pb-1">
+          {[
+            "Hey! 👋",
+            "How are you? 😊",
+            "Sounds great! ✨",
+            "Let's talk 💬",
+            "I like you ❤️",
+            "Miss you 🥺",
+          ].map((reply) => (
+            <button
+              key={reply}
+              type="button"
+              onClick={() => {
+                setText(reply);
+              }}
+              className="shrink-0 px-3 py-1.5 rounded-full text-xs text-white/80 whitespace-nowrap transition-all active:scale-95"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid",
+                borderColor: "transparent",
+                backgroundClip: "padding-box",
+                boxShadow: "0 0 0 1px rgba(236,72,153,0.3)",
+              }}
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Input bar */}

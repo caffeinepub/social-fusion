@@ -1,6 +1,6 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type {
   Message,
   Notification,
@@ -21,6 +21,8 @@ export function useGetCallerProfile() {
       return actor.getCallerUserProfile();
     },
     enabled: !!actor && !actorFetching,
+    staleTime: 0,
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
   return {
@@ -507,4 +509,38 @@ export function usePrefetchAll() {
       /* silent: individual query hooks will show errors */
     });
   }, [actor, isFetching, qc]);
+}
+
+// ─── Blocked Users (localStorage-backed) ─────────────────────────────────────
+const BLOCKED_KEY = "blocked_users";
+
+export function useBlockedUsers() {
+  const [blockedSet, setBlockedSet] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(BLOCKED_KEY);
+      if (raw) return new Set<string>(JSON.parse(raw));
+    } catch {}
+    return new Set<string>();
+  });
+
+  const persist = (next: Set<string>) => {
+    try {
+      localStorage.setItem(BLOCKED_KEY, JSON.stringify([...next]));
+    } catch {}
+    setBlockedSet(new Set(next));
+  };
+
+  const blockUser = (p: string) => {
+    const next = new Set(blockedSet);
+    next.add(p);
+    persist(next);
+  };
+
+  const unblockUser = (p: string) => {
+    const next = new Set(blockedSet);
+    next.delete(p);
+    persist(next);
+  };
+
+  return { blockedSet, blockUser, unblockUser };
 }

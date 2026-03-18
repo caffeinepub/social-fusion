@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Crown,
   Edit2,
   Gift,
   Grid,
@@ -34,6 +35,7 @@ import {
   LogOut,
   Play,
   Plus,
+  Settings2,
   Share2,
   Shield,
   Sparkles,
@@ -55,8 +57,10 @@ import {
   useSaveStoryToHighlight,
   useUpdateProfile,
 } from "../../hooks/useQueries";
+import { AppSettingsSheet } from "../AppSettingsSheet";
 import FollowListSheet from "../FollowListSheet";
 import GiftSheet from "../GiftSheet";
+import { PremiumScreen } from "../PremiumScreen";
 
 const MOODS = ["😊", "🎉", "❤️", "🔥", "😴"];
 
@@ -90,6 +94,8 @@ export default function ProfileTab() {
   const { data: followers } = useGetFollowers(myPrincipal);
   const { data: following } = useGetFollowing(myPrincipal);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [premiumOpen, setPremiumOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const [followSheet, setFollowSheet] = useState<
     "followers" | "following" | null
@@ -180,6 +186,14 @@ export default function ProfileTab() {
         <div className="absolute top-4 right-4 flex gap-2">
           <button
             type="button"
+            data-ocid="profile.open_modal_button"
+            onClick={() => setSettingsOpen(true)}
+            className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
+          >
+            <Settings2 className="w-4 h-4 text-white/80" />
+          </button>
+          <button
+            type="button"
             onClick={() => setPrivacyOpen(!privacyOpen)}
             className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
           >
@@ -196,8 +210,8 @@ export default function ProfileTab() {
         </div>
 
         {/* Avatar overlapping */}
-        <div className="absolute -bottom-10 left-4 flex items-end gap-3 z-20">
-          <div className="relative z-20">
+        <div className="absolute -bottom-10 left-4 flex items-end gap-3 z-50">
+          <div className="relative z-50">
             <Avatar className="w-20 h-20 ring-4 ring-[#0a0a0f]">
               {profile?.avatar && (
                 <AvatarImage src={profile.avatar.getDirectURL()} />
@@ -306,6 +320,40 @@ export default function ProfileTab() {
             </button>
           ))}
         </div>
+
+        {/* Go Premium banner */}
+        <motion.button
+          type="button"
+          data-ocid="profile.primary_button"
+          onClick={() => setPremiumOpen(true)}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full mt-3 rounded-2xl overflow-hidden flex items-center justify-between px-4 py-3 relative"
+          style={{
+            background:
+              "linear-gradient(135deg, #78350f, #d97706, #b45309, #92400e)",
+          }}
+        >
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              background:
+                "radial-gradient(ellipse at 30% 50%, #fcd34d 0%, transparent 60%)",
+            }}
+          />
+          <div className="flex items-center gap-2 relative z-10">
+            <Crown className="w-5 h-5 text-yellow-200" />
+            <div className="text-left">
+              <p className="text-yellow-100 font-bold text-sm">Go Premium ✨</p>
+              <p className="text-yellow-200/70 text-[11px]">
+                Unlock Super Likes, Boosts & more
+              </p>
+            </div>
+          </div>
+          <div className="relative z-10 w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
+            <Crown className="w-4 h-4 text-yellow-200" />
+          </div>
+        </motion.button>
 
         {/* Profile Strength meter */}
         <div className="mt-4 bg-white/5 border border-white/10 rounded-2xl p-4">
@@ -586,6 +634,11 @@ export default function ProfileTab() {
         )}
       </AnimatePresence>
 
+      <PremiumScreen open={premiumOpen} onClose={() => setPremiumOpen(false)} />
+      <AppSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
       <GiftSheet
         open={giftOpen}
         onClose={() => setGiftOpen(false)}
@@ -1048,7 +1101,23 @@ function ExtendedProfileInfo({ profile }: { profile: Profile | null }) {
             <p className="text-white/40 text-[10px] font-medium uppercase tracking-wide">
               {item.label}
             </p>
-            <p className="text-white/80 text-sm">{item.value}</p>
+            <div className="flex flex-wrap gap-1.5 mt-0.5">
+              {item.value
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean)
+                .map((token) => (
+                  <span
+                    key={token}
+                    className="px-2.5 py-1 rounded-full text-xs font-medium text-white"
+                    style={{
+                      background: "linear-gradient(135deg, #ec4899, #a855f7)",
+                    }}
+                  >
+                    {token}
+                  </span>
+                ))}
+            </div>
           </div>
         </div>
       ))}

@@ -13,6 +13,7 @@ import { useRef, useState } from "react";
 import type { Profile } from "../../backend";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
+  useBlockedUsers,
   useGetAllProfiles,
   useGetCallerProfile,
   useGetStories,
@@ -21,6 +22,7 @@ import {
   useTinderPass,
 } from "../../hooks/useQueries";
 import LiveBroadcastScreen from "../LiveBroadcastScreen";
+import ProfileBadges from "../ProfileBadges";
 import SearchScreen from "../SearchScreen";
 import StoryCreatorSheet from "../StoryCreatorSheet";
 
@@ -302,6 +304,84 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
         </div>
       </div>
 
+      {/* Daily Picks section */}
+      {(() => {
+        const pickProfiles = (allProfiles ?? [])
+          .filter(([p]) => p.toString() !== myPrincipal?.toString())
+          .slice(0, 3);
+        if (pickProfiles.length === 0) return null;
+        return (
+          <div className="px-4 pb-3 shrink-0">
+            <p
+              className="text-sm font-bold mb-2"
+              style={{
+                background: "linear-gradient(90deg, #ec4899, #a855f7, #ec4899)",
+                backgroundSize: "200%",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Today&apos;s Picks ✨
+            </p>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+              {pickProfiles.map(([principal, prof]) => {
+                const matchScore =
+                  (principal.toString().charCodeAt(2) % 40) + 60;
+                return (
+                  <button
+                    key={principal.toString()}
+                    type="button"
+                    onClick={() => onUserClick(principal)}
+                    className="shrink-0 flex flex-col items-center gap-1.5 rounded-2xl p-3 active:scale-95 transition-transform"
+                    style={{
+                      width: 130,
+                      background: "rgba(255,255,255,0.04)",
+                      boxShadow:
+                        "0 0 0 1.5px rgba(236,72,153,0.3), 0 4px 16px rgba(168,85,247,0.12)",
+                    }}
+                  >
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-pink-500 to-purple-600">
+                      {prof.avatar ? (
+                        <img
+                          src={prof.avatar.getDirectURL()}
+                          alt={prof.displayName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white font-bold text-lg">
+                          {prof.displayName[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-white text-xs font-semibold truncate w-full text-center">
+                      {prof.displayName}
+                    </p>
+                    <p
+                      className="text-xs font-bold"
+                      style={{ color: "#f472b6" }}
+                    >
+                      {matchScore}% Match
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                      style={{
+                        background: "linear-gradient(135deg, #ec4899, #a855f7)",
+                      }}
+                    >
+                      <Heart className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Swipe section */}
       <div className="flex-1 overflow-hidden">
         <TinderSection onUserClick={onUserClick} onLikeSound={playLikeSound} />
@@ -323,6 +403,7 @@ function TinderSection({
   const { data: allProfiles } = useGetAllProfiles();
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
+  const { blockedSet } = useBlockedUsers();
   const _tinderLike = useTinderLike();
   const _tinderPass = useTinderPass();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -335,7 +416,11 @@ function TinderSection({
     queue && queue.length > 0
       ? queue
       : (allProfiles
-          ?.filter(([p]) => p.toString() !== myPrincipal?.toString())
+          ?.filter(
+            ([p]) =>
+              p.toString() !== myPrincipal?.toString() &&
+              !blockedSet.has(p.toString()),
+          )
           .map(([, prof]) => prof) ?? []);
   const currentProfile = profiles[currentIndex] ?? null;
 

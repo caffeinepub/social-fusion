@@ -10,6 +10,7 @@ import {
   Grid,
   Loader2,
   MessageCircle,
+  MoreVertical,
   Phone,
   UserCheck,
   UserPlus,
@@ -21,6 +22,7 @@ import { useState } from "react";
 import { useCallSignal } from "../hooks/useCallSignal";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
+  useBlockedUsers,
   useFollow,
   useGetFollowers,
   useGetFollowing,
@@ -33,6 +35,7 @@ import FollowListSheet from "./FollowListSheet";
 import GiftSheet from "./GiftSheet";
 import IncomingCallOverlay from "./IncomingCallOverlay";
 import OutgoingCallOverlay from "./OutgoingCallOverlay";
+import ProfileBadges from "./ProfileBadges";
 
 interface Props {
   principal: Principal;
@@ -72,6 +75,8 @@ export default function UserProfileView({
   const [followSheet, setFollowSheet] = useState<
     "followers" | "following" | null
   >(null);
+  const [showBlockMenu, setShowBlockMenu] = useState(false);
+  const { blockUser } = useBlockedUsers();
 
   const isMe = myPrincipal?.toString() === principal.toString();
   const isFollowing =
@@ -181,6 +186,47 @@ export default function UserProfileView({
         <ArrowLeft className="w-5 h-5 text-white" />
       </button>
 
+      {/* Block/Report menu */}
+      {!isMe && (
+        <div className="fixed top-3 right-3 z-30">
+          <button
+            type="button"
+            data-ocid="user_profile.open_modal_button"
+            onClick={() => setShowBlockMenu((v) => !v)}
+            className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+          >
+            <MoreVertical className="w-5 h-5 text-white" />
+          </button>
+          {showBlockMenu && (
+            <div
+              className="absolute right-0 top-11 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[140px]"
+              data-ocid="user_profile.dropdown_menu"
+            >
+              <button
+                type="button"
+                data-ocid="user_profile.delete_button"
+                onClick={() => {
+                  blockUser(principal.toString());
+                  setShowBlockMenu(false);
+                  onBack();
+                }}
+                className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                🚫 Block User
+              </button>
+              <button
+                type="button"
+                data-ocid="user_profile.secondary_button"
+                onClick={() => setShowBlockMenu(false)}
+                className="w-full flex items-center gap-2 px-4 py-3 text-sm text-white/70 hover:bg-white/5 transition-colors"
+              >
+                ⚠️ Report
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Image Carousel */}
       <div className="relative w-full" style={{ aspectRatio: "4/5" }}>
         {carouselImages.length > 0 ? (
@@ -250,6 +296,10 @@ export default function UserProfileView({
       {/* Profile content */}
       <div className="px-4 -mt-4 relative z-10">
         <h2 className="text-2xl font-bold text-white">{profile.displayName}</h2>
+        <ProfileBadges
+          principalStr={principal.toString()}
+          className="mt-1.5 mb-1"
+        />
         {profile.location && (
           <p className="text-white/50 text-sm mt-0.5">📍 {profile.location}</p>
         )}
