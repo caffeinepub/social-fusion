@@ -1,32 +1,27 @@
-# Social Fusion
+# Social Fusion v6
 
 ## Current State
-Full-stack social app with: home feed (posts + stories), discover (user list + follow), create post, messages (DM), profile (edit name/bio/avatar). Backend has profiles, posts, stories, messages, follow/unfollow. Profile type has: displayName, bio, avatar.
+Full social media app with Browse/Requests/Matches/Chats/Profile tabs. Global header shows "Social Fusion" logo + bell icon. Discover (Browse) tab has its own internal layout. MessagesTab has a chat list and opens individual chats. ProfileTab has user info and settings.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Tinder-style Discover tab**: Swipeable profile cards (swipe right = like, swipe left = pass). Show profile photo, name, bio, age, location. Matches list when both users like each other.
-- **Notifications panel**: Instagram-style notification bell in home header with badge count. Panel shows: new followers, post likes, comments, matches.
-- **Profile expanded fields**: website, location, gender, birthday, relationship status displayed on profile. Edit dialog includes these new fields.
-- **Call UI**: Voice call and video call overlay screens. Buttons in conversation header (phone + video icons). Simulated call screen with accept/end/mute controls.
-- **Facebook-style features**: Friend requests (separate from follow), online status indicator in messages, "People You May Know" section.
-- **Backend**: Expanded Profile type, Notification type/storage, Tinder like/pass/matches, notifications generated on follow/like/comment/match.
+- Browse tab header: search icon + heart icon (replaces global header on browse tab). Heart icon click opens NotificationsPanel.
+- Chat settings panel: opens when settings icon clicked in MessagesTab. Contains tabs: Chat Settings, Privacy, Inbox, Pending Requests, Stars (who starred me), Online Users list below search box.
+- Full-screen chat: when a conversation is open, hide bottom navbar completely. Chat UI like Facebook Messenger (bubbles, reactions, seen/delivered, online dot, call/video icons in header).
+- Profile: add more info fields — interests, hobbies, favourite movies, favourite songs, education, thoughts/thinking about. Support 7 photos. Add background/cover image upload at top of profile.
 
 ### Modify
-- DiscoverTab: Replace plain list with Tinder card stack (swipe gestures) + matches section below.
-- ProfileTab: Show more fields, richer header matching Instagram screenshots.
-- MessagesTab: Add call/video buttons in conversation header, online status dots.
-- BottomNav: Add notification badge dot on the home icon when unread notifications exist.
-- HomeTab: Add notification bell icon in header.
+- Browse tab: remove global header when on browse tab; show inline header with search icon + heart icon only.
+- Profile: expand profile card to show new fields and cover photo upload.
+- MessagesTab: full-screen chat hides BottomNav; chat settings panel accessible from settings icon.
 
 ### Remove
-- Nothing removed.
+- Global header hidden when on Browse tab (shown only for other tabs or removed entirely if browse always shows inline header).
 
 ## Implementation Plan
-1. Generate updated Motoko backend (expanded Profile, Notification system, tinderLike/pass, getMatches).
-2. Update DiscoverTab with swipe card UI and matches list.
-3. Add NotificationsPanel component and wire to HomeTab header bell.
-4. Update ProfileTab with all new fields.
-5. Update MessagesTab with call/video call UI overlay.
-6. Update BottomNav with notification badge.
+1. App.tsx: conditionally hide global header when activeTab === 'browse'; pass setNotifOpen + chat open state up so BottomNav can be hidden when chat is open.
+2. DiscoverTab: add header row with Search icon + Heart icon (heart opens notifications).
+3. MessagesTab: add settings icon that opens ChatSettingsPanel; track chatOpen state and pass up to hide BottomNav; full-screen chat view with Facebook Messenger style.
+4. ChatSettingsPanel: new component with tabs (Settings, Privacy, Inbox, Pending, Stars, Online).
+5. ProfileTab: add cover image upload, 7 profile photos, and new fields (interests, hobbies, fav movies, fav songs, education, thoughts).

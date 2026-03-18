@@ -1,94 +1,223 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Principal } from "@icp-sdk/core/principal";
-import {
-  Heart,
-  Loader2,
-  MessageCircle,
-  Search,
-  UserCheck,
-  UserPlus,
-  X,
-} from "lucide-react";
+import { Heart, Search, Star, X, Zap } from "lucide-react";
 import {
   AnimatePresence,
   motion,
   useMotionValue,
   useTransform,
 } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Profile } from "../../backend";
-import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
-  useFollow,
-  useGetAllProfiles,
-  useGetFollowing,
-  useGetMatches,
   useGetTinderQueue,
-  useGetUserProfile,
-  useSearchUsers,
   useTinderLike,
   useTinderPass,
 } from "../../hooks/useQueries";
+import LiveBroadcastScreen from "../LiveBroadcastScreen";
+import SearchScreen from "../SearchScreen";
+import StoryCreatorSheet from "../StoryCreatorSheet";
+
+const CONFETTI_PIECES = Array.from({ length: 20 }, (_, i) => ({
+  id: `piece-${i}`,
+  color: ["#ff0080", "#7c3aed", "#fbbf24", "#06b6d4", "#f97316", "#10b981"][
+    i % 6
+  ],
+  index: i,
+}));
+
+function ConfettiPiece({ color, index }: { color: string; index: number }) {
+  const angle = (index / 20) * 360;
+  const distance = 80 + Math.random() * 80;
+  const tx = Math.cos((angle * Math.PI) / 180) * distance;
+  const ty = Math.sin((angle * Math.PI) / 180) * distance;
+  const size = 6 + Math.floor(Math.random() * 6);
+
+  return (
+    <motion.div
+      className="absolute rounded-sm pointer-events-none"
+      style={{
+        width: size,
+        height: size,
+        background: color,
+        top: "50%",
+        left: "50%",
+        marginTop: -size / 2,
+        marginLeft: -size / 2,
+      }}
+      initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
+      animate={{ x: tx, y: ty, opacity: 0, rotate: angle * 2 }}
+      transition={{ duration: 1.5, ease: "easeOut" }}
+    />
+  );
+}
 
 interface Props {
   onUserClick: (p: Principal) => void;
-  onMessageUser?: (p: Principal, profile: Profile) => void;
+  onNotifOpen?: () => void;
 }
 
-export default function DiscoverTab({ onUserClick, onMessageUser }: Props) {
+export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
+  const [showLive, setShowLive] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
+  const [boostActive, setBoostActive] = useState(false);
+  const [boostCountdown, setBoostCountdown] = useState(0);
+  const boostTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleBoost = () => {
+    if (boostActive) return;
+    setBoostActive(true);
+    setBoostCountdown(30);
+    toast.success("⚡ Boost activated! You're on top for 30s");
+    boostTimerRef.current = setInterval(() => {
+      setBoostCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(boostTimerRef.current!);
+          setBoostActive(false);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (boostTimerRef.current) clearInterval(boostTimerRef.current);
+    };
+  }, []);
+
+  if (showLive) {
+    return <LiveBroadcastScreen onBack={() => setShowLive(false)} />;
+  }
+
+  if (showSearch) {
+    return (
+      <SearchScreen
+        onBack={() => setShowSearch(false)}
+        onProfileClick={(p) => {
+          setShowSearch(false);
+          onUserClick(p);
+        }}
+      />
+    );
+  }
+
   return (
-    <div data-ocid="discover.page" className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-0 shrink-0">
-        <h1 className="text-xl font-bold font-display">Discover</h1>
-      </div>
-      <Tabs
-        defaultValue="discover"
-        className="flex flex-col flex-1 overflow-hidden mt-2"
+    <div
+      data-ocid="discover.page"
+      className="flex flex-col h-full bg-[#0a0a0f]"
+    >
+      {/* Inline Header with logo + search + heart */}
+      <div
+        className="shrink-0 flex items-center justify-between px-4 bg-[#0a0a0f] border-b border-white/5"
+        style={{ height: 48 }}
       >
-        <TabsList className="mx-4 shrink-0 grid grid-cols-3 bg-muted rounded-xl h-10">
-          <TabsTrigger
-            data-ocid="discover.tab"
-            value="discover"
-            className="text-xs font-semibold rounded-lg"
-          >
-            Discover
-          </TabsTrigger>
-          <TabsTrigger
-            data-ocid="discover.tab"
-            value="matches"
-            className="text-xs font-semibold rounded-lg"
-          >
-            Matches
-          </TabsTrigger>
-          <TabsTrigger
-            data-ocid="discover.tab"
-            value="people"
-            className="text-xs font-semibold rounded-lg"
-          >
-            People
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent
-          value="discover"
-          className="flex-1 overflow-hidden mt-0 data-[state=active]:flex data-[state=active]:flex-col"
+        <span
+          className="font-display font-bold text-lg"
+          style={{
+            background: "linear-gradient(90deg, #ec4899 0%, #a855f7 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
         >
-          <TinderSection />
-        </TabsContent>
-        <TabsContent value="matches" className="flex-1 overflow-y-auto mt-0">
-          <MatchesSection
-            onUserClick={onUserClick}
-            onMessageUser={onMessageUser}
-          />
-        </TabsContent>
-        <TabsContent value="people" className="flex-1 overflow-y-auto mt-0">
-          <PeopleSection onUserClick={onUserClick} />
-        </TabsContent>
-      </Tabs>
+          Social Fusion
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSearch(true)}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+          >
+            <Search className="w-4 h-4 text-white/70" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onNotifOpen?.()}
+            className="w-9 h-9 rounded-full bg-pink-500/15 flex items-center justify-center relative"
+          >
+            <Heart className="w-4 h-4 text-pink-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* Header */}
+      <div className="px-4 pt-3 pb-3 shrink-0">
+        <div className="flex items-center justify-between">
+          <div />
+          <div className="flex items-center gap-2">
+            {/* Boost button */}
+            <button
+              type="button"
+              data-ocid="discover.toggle"
+              onClick={handleBoost}
+              className={`relative flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-all ${
+                boostActive
+                  ? "bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/40 ring-2 ring-purple-400/50 animate-pulse"
+                  : "bg-purple-600/20 border border-purple-500/40 text-purple-300"
+              }`}
+            >
+              <Zap className="w-3 h-3" />
+              {boostActive ? (
+                <span className="tabular-nums">{boostCountdown}s</span>
+              ) : (
+                "Boost"
+              )}
+            </button>
+
+            {/* LIVE button */}
+            <button
+              type="button"
+              data-ocid="discover.primary_button"
+              onClick={() => setShowLive(true)}
+              className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold px-3 py-1.5 rounded-full"
+            >
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              LIVE
+            </button>
+
+            <button
+              type="button"
+              data-ocid="discover.search_input"
+              onClick={() => setShowSearch(true)}
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Search className="w-4 h-4 text-white/70" />
+            </button>
+          </div>
+        </div>
+
+        {/* Story row */}
+        <div className="flex items-center gap-3 mt-3 overflow-x-auto no-scrollbar pb-1">
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            <button
+              type="button"
+              data-ocid="discover.upload_button"
+              onClick={() => setStoryCreatorOpen(true)}
+              className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/50 flex items-center justify-center bg-pink-500/10 active:scale-95 transition-transform"
+            >
+              <span className="text-pink-400 text-2xl font-light leading-none">
+                +
+              </span>
+            </button>
+            <span className="text-white/50 text-[10px]">Your story</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Swipe section */}
+      <div className="flex-1 overflow-hidden">
+        <TinderSection />
+      </div>
+
+      <StoryCreatorSheet
+        open={storyCreatorOpen}
+        onClose={() => setStoryCreatorOpen(false)}
+      />
     </div>
   );
 }
@@ -99,489 +228,210 @@ function TinderSection() {
   const _tinderPass = useTinderPass();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showMatch, setShowMatch] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [lastMatchName, setLastMatchName] = useState("");
-  const [gone, setGone] = useState<"left" | "right" | null>(null);
 
   const profiles = queue ?? [];
   const current = profiles[currentIndex];
 
   const handleLike = async () => {
     if (!current) return;
-    // We don't have principal in Profile directly from getTinderQueue
-    // We just call like and advance
-    setGone("right");
-    setTimeout(async () => {
-      setGone(null);
-      setCurrentIndex((i) => i + 1);
-      // Simulate match 20% chance for demo
-      if (Math.random() < 0.2) {
-        setLastMatchName(current.displayName);
-        setShowMatch(true);
-      }
-    }, 350);
+    try {
+      await _tinderLike.mutateAsync(current.avatar as never);
+      setLastMatchName(current.displayName);
+      setShowMatch(true);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 1600);
+    } catch {}
+    setCurrentIndex((i) => i + 1);
   };
 
-  const handlePass = () => {
+  const handlePass = async () => {
     if (!current) return;
-    setGone("left");
-    setTimeout(() => {
-      setGone(null);
-      setCurrentIndex((i) => i + 1);
-    }, 350);
+    try {
+      await _tinderPass.mutateAsync(current.avatar as never);
+    } catch {}
+    setCurrentIndex((i) => i + 1);
   };
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="flex items-center justify-center h-full">
         <div
           data-ocid="discover.loading_state"
-          className="flex flex-col items-center gap-3"
+          className="w-full max-w-xs mx-4"
         >
-          <Skeleton className="w-64 h-80 rounded-3xl" />
-          <Skeleton className="w-32 h-4 rounded" />
+          <Skeleton className="w-full aspect-[3/4] rounded-3xl" />
         </div>
       </div>
     );
   }
 
+  if (!current) {
+    return (
+      <div
+        data-ocid="discover.empty_state"
+        className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center"
+      >
+        <div className="text-6xl">🌟</div>
+        <p className="text-white/70 font-bold text-xl">
+          You&apos;re all caught up!
+        </p>
+        <p className="text-white/40 text-sm">Check back later for new people</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4 relative">
+    <div className="relative flex flex-col items-center h-full px-4 pb-4">
       <AnimatePresence>
         {showMatch && (
           <motion.div
-            key="match-overlay"
+            key="match-banner"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 gap-6"
+            className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 rounded-3xl overflow-hidden"
           >
-            <motion.div
-              animate={{ rotate: [0, -5, 5, -5, 5, 0] }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-6xl"
-            >
-              💘
-            </motion.div>
-            <div className="text-center">
-              <p className="text-white text-3xl font-bold font-display">
-                It's a Match!
+            {/* Confetti */}
+            {showConfetti &&
+              CONFETTI_PIECES.map((piece) => (
+                <ConfettiPiece
+                  key={piece.id}
+                  color={piece.color}
+                  index={piece.index}
+                />
+              ))}
+            <div className="flex flex-col items-center gap-4 p-6 relative z-10">
+              <p className="text-5xl">💕</p>
+              <p className="text-white font-bold text-2xl">
+                It&apos;s a Match!
               </p>
-              <p className="text-white/70 mt-2 text-sm">
+              <p className="text-white/60">
                 You and {lastMatchName} liked each other
               </p>
+              <Button
+                onClick={() => setShowMatch(false)}
+                className="bg-gradient-to-r from-pink-500 to-purple-600 border-0 text-white"
+              >
+                Keep Swiping
+              </Button>
             </div>
-            <Button
-              onClick={() => setShowMatch(false)}
-              className="bg-gradient-to-r from-primary to-secondary text-white px-8 h-12 rounded-full font-semibold"
-            >
-              Keep Swiping
-            </Button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {current ? (
-        <>
-          <TinderCard
-            profile={current}
-            gone={gone}
-            onLike={handleLike}
-            onPass={handlePass}
-          />
-          <div className="flex items-center gap-6 mt-2">
-            <button
-              type="button"
-              data-ocid="discover.delete_button"
-              onClick={handlePass}
-              className="w-14 h-14 rounded-full border-2 border-destructive/50 flex items-center justify-center bg-background shadow-lg hover:bg-destructive/10 transition-colors"
-            >
-              <X className="w-6 h-6 text-destructive" />
-            </button>
-            <button
-              type="button"
-              data-ocid="discover.primary_button"
-              onClick={handleLike}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center shadow-lg shadow-rose-500/30 hover:opacity-90 transition-opacity"
-            >
-              <Heart className="w-6 h-6 text-white fill-white" />
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {profiles.length - currentIndex} profiles left
-          </p>
-        </>
-      ) : (
-        <div
-          data-ocid="discover.empty_state"
-          className="flex flex-col items-center gap-4 text-center"
-        >
-          <div className="text-5xl">😴</div>
-          <p className="font-semibold text-lg">No more profiles right now</p>
-          <p className="text-sm text-muted-foreground">
-            Check back later for new people!
-          </p>
-        </div>
-      )}
+      <SwipeCard profile={current} onLike={handleLike} onPass={handlePass} />
     </div>
   );
 }
 
-function TinderCard({
+function SwipeCard({
   profile,
-  gone,
   onLike,
   onPass,
-}: {
-  profile: Profile;
-  gone: "left" | "right" | null;
-  onLike: () => void;
-  onPass: () => void;
-}) {
+}: { profile: Profile; onLike: () => void; onPass: () => void }) {
   const x = useMotionValue(0);
-  const rotate = useTransform(x, [-200, 200], [-20, 20]);
-  const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0, 1, 1, 1, 0]);
-
-  const likeOpacity = useTransform(x, [0, 80], [0, 1]);
-  const passOpacity = useTransform(x, [-80, 0], [1, 0]);
+  const rotate = useTransform(x, [-150, 150], [-18, 18]);
+  const opacity = useTransform(x, [-150, -80, 0, 80, 150], [0, 1, 1, 1, 0]);
+  const likeOpacity = useTransform(x, [20, 80], [0, 1]);
+  const nopeOpacity = useTransform(x, [-80, -20], [1, 0]);
 
   const handleDragEnd = (_: unknown, info: { offset: { x: number } }) => {
     if (info.offset.x > 100) onLike();
     else if (info.offset.x < -100) onPass();
-    else x.set(0);
   };
 
-  const calcAge = (birthday: string) => {
-    if (!birthday) return null;
-    const birth = new Date(birthday);
-    const ageDiff = Date.now() - birth.getTime();
-    return Math.abs(new Date(ageDiff).getUTCFullYear() - 1970);
+  const handleSuperlike = () => {
+    toast.success("💫 Super Like!");
+    onLike();
   };
 
   return (
-    <motion.div
-      style={{ x, rotate, opacity }}
-      drag="x"
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.9}
-      onDragEnd={handleDragEnd}
-      animate={
-        gone === "right"
-          ? { x: 400, opacity: 0 }
-          : gone === "left"
-            ? { x: -400, opacity: 0 }
-            : {}
-      }
-      className="relative w-72 cursor-grab active:cursor-grabbing select-none"
-      data-ocid="discover.card"
-    >
-      {/* Like/Pass indicators */}
+    <div className="relative w-full flex flex-col items-center flex-1">
       <motion.div
-        style={{ opacity: likeOpacity }}
-        className="absolute top-6 left-4 z-10 bg-green-500 text-white font-bold text-lg px-4 py-1 rounded-lg border-2 border-green-400 rotate-[-20deg]"
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        style={{ x, rotate, opacity }}
+        onDragEnd={handleDragEnd}
+        className="w-full cursor-grab active:cursor-grabbing"
+        data-ocid="discover.card"
       >
-        LIKE
-      </motion.div>
-      <motion.div
-        style={{ opacity: passOpacity }}
-        className="absolute top-6 right-4 z-10 bg-red-500 text-white font-bold text-lg px-4 py-1 rounded-lg border-2 border-red-400 rotate-[20deg]"
-      >
-        NOPE
-      </motion.div>
-
-      <div className="w-72 h-96 rounded-3xl overflow-hidden bg-card shadow-2xl shadow-black/20">
-        {profile.avatar ? (
-          <img
-            src={profile.avatar.getDirectURL()}
-            alt={profile.displayName}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-primary/40 via-secondary/30 to-accent/40 flex items-center justify-center">
-            <Avatar className="w-24 h-24">
-              <AvatarFallback className="bg-primary/20 text-4xl font-bold">
-                {profile.displayName[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        )}
-        {/* Gradient overlay info */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-          <p className="text-white font-bold text-xl">
-            {profile.displayName}
-            {profile.birthday && calcAge(profile.birthday)
-              ? `, ${calcAge(profile.birthday)}`
-              : ""}
-          </p>
-          {profile.location && (
-            <p className="text-white/80 text-sm flex items-center gap-1 mt-0.5">
-              📍 {profile.location}
-            </p>
+        <div className="relative w-full aspect-[3/4] rounded-3xl overflow-hidden bg-gradient-to-br from-pink-900/40 to-purple-900/40 shadow-2xl">
+          {profile.avatar ? (
+            <img
+              src={profile.avatar.getDirectURL()}
+              alt={profile.displayName}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-8xl">👤</span>
+            </div>
           )}
-          {profile.bio && (
-            <p className="text-white/70 text-xs mt-1 line-clamp-2">
-              {profile.bio}
-            </p>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
 
-function MatchesSection({
-  onUserClick,
-  onMessageUser,
-}: {
-  onUserClick: (p: Principal) => void;
-  onMessageUser?: (p: Principal, profile: Profile) => void;
-}) {
-  const { data: matchPrincipals, isLoading } = useGetMatches();
-
-  if (isLoading) {
-    return (
-      <div className="p-4 flex flex-col gap-3">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            data-ocid="discover.loading_state"
-            className="flex items-center gap-3"
+          {/* Like/Nope overlays */}
+          <motion.div
+            style={{ opacity: likeOpacity }}
+            className="absolute top-8 left-6 rotate-[-15deg] border-4 border-green-400 rounded-lg px-3 py-1"
           >
-            <Skeleton className="w-12 h-12 rounded-full" />
-            <Skeleton className="w-32 h-4" />
-          </div>
-        ))}
-      </div>
-    );
-  }
+            <span className="text-green-400 font-black text-2xl">LIKE</span>
+          </motion.div>
+          <motion.div
+            style={{ opacity: nopeOpacity }}
+            className="absolute top-8 right-6 rotate-[15deg] border-4 border-red-400 rounded-lg px-3 py-1"
+          >
+            <span className="text-red-400 font-black text-2xl">NOPE</span>
+          </motion.div>
 
-  if (!matchPrincipals || matchPrincipals.length === 0) {
-    return (
-      <div
-        data-ocid="discover.empty_state"
-        className="flex flex-col items-center justify-center py-16 gap-4"
-      >
-        <div className="text-5xl">💝</div>
-        <p className="font-semibold">No matches yet</p>
-        <p className="text-sm text-muted-foreground">
-          Start swiping to find your match!
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-4 flex flex-col gap-2 pb-24">
-      {matchPrincipals.map((principal, i) => (
-        <MatchRow
-          key={principal.toString()}
-          principal={principal}
-          index={i}
-          onUserClick={onUserClick}
-          onMessageUser={onMessageUser}
-        />
-      ))}
-    </div>
-  );
-}
-
-function MatchRow({
-  principal,
-  index,
-  onUserClick,
-  onMessageUser,
-}: {
-  principal: Principal;
-  index: number;
-  onUserClick: (p: Principal) => void;
-  onMessageUser?: (p: Principal, profile: Profile) => void;
-}) {
-  const { data: profile } = useGetUserProfile(principal);
-
-  return (
-    <div
-      data-ocid={`discover.item.${index + 1}`}
-      className="flex items-center gap-3 bg-card rounded-xl p-3"
-    >
-      <button
-        type="button"
-        onClick={() => onUserClick(principal)}
-        className="flex items-center gap-3 flex-1 min-w-0"
-      >
-        <div className="relative">
-          <Avatar className="w-12 h-12">
-            {profile?.avatar && (
-              <AvatarImage src={profile.avatar.getDirectURL()} />
+          {/* Info gradient */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4">
+            <h3 className="text-white font-bold text-xl">
+              {profile.displayName}
+            </h3>
+            {profile.location && (
+              <p className="text-white/60 text-sm">📍 {profile.location}</p>
             )}
-            <AvatarFallback className="bg-gradient-to-br from-rose-400 to-pink-500 text-white">
-              {profile?.displayName?.[0]?.toUpperCase() || "?"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center">
-            <Heart className="w-2.5 h-2.5 text-white fill-white" />
+            {profile.bio && (
+              <p className="text-white/70 text-sm mt-1 line-clamp-2">
+                {profile.bio}
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex flex-col min-w-0">
-          <p className="font-semibold text-sm truncate">
-            {profile?.displayName || "Loading..."}
-          </p>
-          {profile?.location && (
-            <p className="text-xs text-muted-foreground truncate">
-              📍 {profile.location}
-            </p>
-          )}
-        </div>
-      </button>
-      {profile && onMessageUser && (
+      </motion.div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-5 mt-4">
+        {/* Pass */}
         <button
           type="button"
-          data-ocid={`discover.secondary_button.${index + 1}`}
-          onClick={() => onMessageUser(principal, profile)}
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+          data-ocid="discover.delete_button"
+          onClick={onPass}
+          className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shadow-lg active:scale-95 transition-transform"
         >
-          <MessageCircle className="w-4 h-4" />
+          <X className="w-6 h-6 text-white" />
         </button>
-      )}
-    </div>
-  );
-}
 
-function PeopleSection({
-  onUserClick,
-}: { onUserClick: (p: Principal) => void }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const { identity } = useInternetIdentity();
-  const myPrincipal = identity?.getPrincipal() ?? null;
+        {/* Superlike (center-ish) */}
+        <button
+          type="button"
+          data-ocid="discover.secondary_button"
+          onClick={handleSuperlike}
+          className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center shadow-lg shadow-yellow-400/30 active:scale-95 transition-transform"
+        >
+          <Star className="w-6 h-6 text-white fill-white" />
+        </button>
 
-  const { data: allProfiles, isLoading } = useGetAllProfiles();
-  const { data: searchResults } = useSearchUsers(searchTerm);
-  const { data: following } = useGetFollowing(myPrincipal);
-  const followMutation = useFollow();
-
-  const followingSet = new Set(following?.map((p) => p.toString()) ?? []);
-  const displayList = searchTerm.trim()
-    ? (searchResults ?? [])
-    : (allProfiles ?? []);
-  const filteredList = displayList.filter(
-    ([p]) => p.toString() !== myPrincipal?.toString(),
-  );
-
-  const handleFollow = async (user: Principal, isFollowing: boolean) => {
-    try {
-      await followMutation.mutateAsync({ user, following: isFollowing });
-      toast.success(isFollowing ? "Unfollowed" : "Following!");
-    } catch {
-      toast.error("Action failed");
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-3 py-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            data-ocid="discover.search_input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search people..."
-            className="pl-9 bg-input border-border h-10"
-          />
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          <div className="p-3 flex flex-col gap-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                data-ocid="discover.loading_state"
-                className="flex items-center gap-3"
-              >
-                <Skeleton className="w-12 h-12 rounded-full" />
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <Skeleton className="w-32 h-3" />
-                  <Skeleton className="w-24 h-2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : filteredList.length > 0 ? (
-          <div className="p-3 flex flex-col gap-2 pb-24">
-            {filteredList.map(
-              ([principal, profile]: [Principal, Profile], i) => {
-                const isFollowing = followingSet.has(principal.toString());
-                return (
-                  <div
-                    key={principal.toString()}
-                    data-ocid={`discover.item.${i + 1}`}
-                    className="flex items-center gap-3 bg-card rounded-xl p-3"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onUserClick(principal)}
-                      className="flex items-center gap-3 flex-1 min-w-0"
-                    >
-                      <Avatar className="w-12 h-12 shrink-0">
-                        {profile.avatar && (
-                          <AvatarImage src={profile.avatar.getDirectURL()} />
-                        )}
-                        <AvatarFallback className="bg-muted">
-                          {profile.displayName[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col min-w-0 text-left">
-                        <p className="font-semibold text-sm truncate">
-                          {profile.displayName}
-                        </p>
-                        {profile.bio && (
-                          <p className="text-xs text-muted-foreground truncate">
-                            {profile.bio}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                    <Button
-                      data-ocid={`discover.toggle.${i + 1}`}
-                      size="sm"
-                      variant={isFollowing ? "secondary" : "default"}
-                      onClick={() => handleFollow(principal, isFollowing)}
-                      disabled={followMutation.isPending}
-                      className={`h-8 px-3 shrink-0 ${
-                        isFollowing
-                          ? "bg-muted text-foreground hover:bg-muted/80"
-                          : "bg-gradient-to-r from-primary to-secondary text-white"
-                      }`}
-                    >
-                      {followMutation.isPending ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : isFollowing ? (
-                        <>
-                          <UserCheck className="w-3 h-3 mr-1" />
-                          Following
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="w-3 h-3 mr-1" />
-                          Follow
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                );
-              },
-            )}
-          </div>
-        ) : (
-          <div
-            data-ocid="discover.empty_state"
-            className="flex flex-col items-center justify-center py-16 text-center gap-3"
-          >
-            <Search className="w-10 h-10 text-muted-foreground" />
-            <p className="text-muted-foreground">
-              {searchTerm ? "No users found" : "No users yet"}
-            </p>
-          </div>
-        )}
+        {/* Like */}
+        <button
+          type="button"
+          data-ocid="discover.toggle"
+          onClick={onLike}
+          className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30 active:scale-95 transition-transform"
+        >
+          <Heart className="w-7 h-7 text-white" />
+        </button>
       </div>
     </div>
   );

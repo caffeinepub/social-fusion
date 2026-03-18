@@ -5,13 +5,14 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import LoginScreen from "./components/LoginScreen";
+import NotificationsPanel from "./components/NotificationsPanel";
 import ProfileSetup from "./components/ProfileSetup";
 import UserProfileView from "./components/UserProfileView";
-import CreateTab from "./components/tabs/CreateTab";
 import DiscoverTab from "./components/tabs/DiscoverTab";
-import HomeTab from "./components/tabs/HomeTab";
+import MatchesTab from "./components/tabs/MatchesTab";
 import MessagesTab from "./components/tabs/MessagesTab";
 import ProfileTab from "./components/tabs/ProfileTab";
+import RequestsTab from "./components/tabs/RequestsTab";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useGetCallerProfileForAuth } from "./hooks/useQueries";
 
@@ -48,8 +49,8 @@ function AppInner() {
       <div className="app-container">
         <div className="min-h-dvh flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-secondary animate-pulse" />
-            <p className="text-muted-foreground text-sm">Loading...</p>
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 animate-pulse" />
+            <p className="text-white/50 text-sm">Loading Social Fusion...</p>
           </div>
         </div>
       </div>
@@ -80,8 +81,10 @@ function AppInner() {
 }
 
 function MainApp() {
-  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [activeTab, setActiveTab] = useState<Tab>("browse");
   const [viewingUser, setViewingUser] = useState<Principal | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const handleUserClick = (p: Principal) => setViewingUser(p);
   const handleBack = () => setViewingUser(null);
@@ -97,8 +100,30 @@ function MainApp() {
     );
   }
 
+  // Hide header on browse tab (DiscoverTab has its own inline header)
+  const showGlobalHeader = activeTab !== "browse";
+
   return (
     <div className="flex flex-col h-dvh">
+      {/* Fixed header strip - hidden on browse tab */}
+      {showGlobalHeader && (
+        <header
+          className="shrink-0 flex items-center justify-between px-4 bg-[#0a0a0f] border-b border-white/5"
+          style={{ height: 48 }}
+        >
+          <span
+            className="font-display font-bold text-lg"
+            style={{
+              background: "linear-gradient(90deg, #ec4899 0%, #a855f7 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Social Fusion
+          </span>
+        </header>
+      )}
+
       <main className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
@@ -109,19 +134,40 @@ function MainApp() {
             transition={{ duration: 0.15 }}
             className="h-full"
           >
-            {activeTab === "home" && <HomeTab onUserClick={handleUserClick} />}
-            {activeTab === "discover" && (
-              <DiscoverTab onUserClick={handleUserClick} />
+            {activeTab === "browse" && (
+              <DiscoverTab
+                onUserClick={handleUserClick}
+                onNotifOpen={() => setNotifOpen(true)}
+              />
             )}
-            {activeTab === "create" && (
-              <CreateTab onSuccess={() => setActiveTab("home")} />
+            {activeTab === "requests" && (
+              <RequestsTab onUserClick={handleUserClick} />
             )}
-            {activeTab === "messages" && <MessagesTab />}
+            {activeTab === "matches" && (
+              <MatchesTab
+                onUserClick={handleUserClick}
+                onMessageUser={() => setActiveTab("chats")}
+              />
+            )}
+            {activeTab === "chats" && (
+              <MessagesTab onChatOpenChange={setChatOpen} />
+            )}
             {activeTab === "profile" && <ProfileTab />}
           </motion.div>
         </AnimatePresence>
       </main>
-      <BottomNav active={activeTab} onChange={setActiveTab} />
+
+      {/* Hide bottom nav when a chat conversation is open */}
+      {!chatOpen && <BottomNav active={activeTab} onChange={setActiveTab} />}
+
+      <NotificationsPanel
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        onProfileClick={(p) => {
+          setViewingUser(p);
+          setNotifOpen(false);
+        }}
+      />
     </div>
   );
 }

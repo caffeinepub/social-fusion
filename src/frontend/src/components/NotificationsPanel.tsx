@@ -22,9 +22,14 @@ import {
 interface Props {
   open: boolean;
   onClose: () => void;
+  onProfileClick?: (principal: Principal) => void;
 }
 
-export default function NotificationsPanel({ open, onClose }: Props) {
+export default function NotificationsPanel({
+  open,
+  onClose,
+  onProfileClick,
+}: Props) {
   const { data: notifications, isLoading } = useGetNotifications();
   const markRead = useMarkNotificationsRead();
 
@@ -108,6 +113,8 @@ export default function NotificationsPanel({ open, onClose }: Props) {
                       key={notif.id.toString()}
                       notification={notif}
                       index={i}
+                      onProfileClick={onProfileClick}
+                      onClose={onClose}
                     />
                   ))}
                 </div>
@@ -133,9 +140,13 @@ export default function NotificationsPanel({ open, onClose }: Props) {
 function NotificationItem({
   notification,
   index,
+  onProfileClick,
+  onClose,
 }: {
   notification: Notification;
   index: number;
+  onProfileClick?: (principal: Principal) => void;
+  onClose: () => void;
 }) {
   const { data: fromProfile } = useGetUserProfile(
     notification.fromUser as Principal,
@@ -181,10 +192,19 @@ function NotificationItem({
     return new Date(ms).toLocaleDateString();
   };
 
+  const handleClick = () => {
+    if (onProfileClick) {
+      onProfileClick(notification.fromUser as Principal);
+      onClose();
+    }
+  };
+
   return (
-    <div
+    <button
+      type="button"
       data-ocid={`notifications.item.${index + 1}`}
-      className={`flex items-center gap-3 px-4 py-3 border-b border-border/50 ${
+      onClick={handleClick}
+      className={`flex items-center gap-3 px-4 py-3 border-b border-border/50 w-full text-left transition-colors active:bg-white/5 hover:bg-white/5 ${
         !notification.read ? "bg-primary/5" : ""
       }`}
     >
@@ -210,6 +230,6 @@ function NotificationItem({
       {!notification.read && (
         <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
       )}
-    </div>
+    </button>
   );
 }
