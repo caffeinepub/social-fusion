@@ -71,6 +71,48 @@ const CHAT_THEMES = [
   },
 ];
 
+const STICKER_LIST = [
+  "😀",
+  "😂",
+  "🥰",
+  "😍",
+  "😎",
+  "😭",
+  "😡",
+  "🤔",
+  "🥺",
+  "😘",
+  "👍",
+  "❤️",
+  "🔥",
+  "✨",
+  "🎉",
+  "💯",
+  "🙏",
+  "👏",
+  "💪",
+  "💖",
+  "💋",
+  "🌹",
+  "🦋",
+  "⭐",
+  "🎀",
+  "🍕",
+  "🎵",
+  "🚀",
+  "🌈",
+  "🥳",
+  "😜",
+  "🤩",
+  "😇",
+  "🤗",
+  "💎",
+  "👑",
+  "🌸",
+  "🍀",
+  "🌊",
+  "🦄",
+];
 const EMOJI_LIST = [
   "😀",
   "😂",
@@ -135,7 +177,11 @@ const EMOJI_LIST = [
 ];
 export default function MessagesTab({
   onChatOpenChange,
-}: { onChatOpenChange?: (open: boolean) => void }) {
+  onViewProfile,
+}: {
+  onChatOpenChange?: (open: boolean) => void;
+  onViewProfile?: (p: import("@icp-sdk/core/principal").Principal) => void;
+}) {
   const [selectedUser, setSelectedUser] = useState<{
     principal: Principal;
     profile: Profile;
@@ -167,6 +213,7 @@ export default function MessagesTab({
         otherUser={selectedUser.principal}
         otherProfile={selectedUser.profile}
         onBack={handleBackFromChat}
+        onViewProfile={onViewProfile}
       />
     );
   }
@@ -643,10 +690,12 @@ function ConversationView({
   otherUser,
   otherProfile,
   onBack,
+  onViewProfile,
 }: {
   otherUser: Principal;
   otherProfile: Profile;
   onBack: () => void;
+  onViewProfile?: (p: Principal) => void;
 }) {
   const [text, setText] = useState("");
   const [activeCall, setActiveCall] = useState<"voice" | "video" | null>(null);
@@ -673,11 +722,19 @@ function ConversationView({
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [chatTheme, setChatTheme] = useState(CHAT_THEMES[0]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiTab, setEmojiTab] = useState<"emoji" | "sticker">("emoji");
   const [filePreview, setFilePreview] = useState<{
     url: string;
     name: string;
     type: string;
   } | null>(null);
+  const [voicePreview, setVoicePreview] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [localAudioMessages, setLocalAudioMessages] = useState<
+    { timestamp: number; url: string }[]
+  >([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
@@ -719,6 +776,50 @@ function ConversationView({
         URL.revokeObjectURL(filePreview.url);
         setFilePreview(null);
       }
+    } catch {}
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const url = URL.createObjectURL(blob);
+        setVoicePreview(url);
+        for (const t of stream.getTracks()) {
+          t.stop();
+        }
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch {}
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!voicePreview) return;
+    const ts = Date.now();
+    setLocalAudioMessages((prev) => [
+      ...prev,
+      { timestamp: ts, url: voicePreview },
+    ]);
+    setVoicePreview(null);
+    try {
+      await sendMessage.mutateAsync({
+        to: otherUser,
+        content: "🎤 Voice message",
+      });
     } catch {}
   };
 
@@ -769,14 +870,21 @@ function ConversationView({
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <Avatar className="w-9 h-9 shrink-0">
-          {otherProfile.avatar && (
-            <AvatarImage src={otherProfile.avatar.getDirectURL()} />
-          )}
-          <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm">
-            {otherProfile.displayName[0]?.toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <button
+          type="button"
+          className="shrink-0"
+          onClick={() => onViewProfile?.(otherUser)}
+          title="View profile"
+        >
+          <Avatar className="w-9 h-9">
+            {otherProfile.avatar && (
+              <AvatarImage src={otherProfile.avatar.getDirectURL()} />
+            )}
+            <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm">
+              {otherProfile.displayName[0]?.toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </button>
         <div className="flex flex-col flex-1 min-w-0">
           <p className="font-semibold text-white text-sm truncate">
             {otherProfile.displayName}
@@ -866,6 +974,19 @@ function ConversationView({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col-reverse gap-2">
+        {/* Local voice messages */}
+        {localAudioMessages.map((am) => (
+          <div key={am.timestamp} className="flex flex-col items-end gap-0.5">
+            <div className="flex items-end gap-2 justify-end">
+              <div className="max-w-[72%] px-3 py-2 rounded-2xl rounded-br-sm bg-gradient-to-br from-purple-600 to-violet-500">
+                <audio src={am.url} controls className="h-7 w-36 rounded">
+                  <track kind="captions" />
+                </audio>
+                <p className="text-[10px] mt-0.5 text-white/50">now</p>
+              </div>
+            </div>
+          </div>
+        ))}
         {/* Typing indicator - always shown */}
         <TypingIndicator />
 
@@ -894,14 +1015,23 @@ function ConversationView({
                   }`}
                 >
                   {!isMe && (
-                    <Avatar className="w-6 h-6 shrink-0 mb-1">
-                      {otherProfile.avatar && (
-                        <AvatarImage src={otherProfile.avatar.getDirectURL()} />
-                      )}
-                      <AvatarFallback className="bg-purple-600 text-white text-[10px]">
-                        {otherProfile.displayName[0]?.toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <button
+                      type="button"
+                      className="shrink-0 mb-1"
+                      onClick={() => onViewProfile?.(otherUser)}
+                      title={`View ${otherProfile.displayName}'s profile`}
+                    >
+                      <Avatar className="w-6 h-6">
+                        {otherProfile.avatar && (
+                          <AvatarImage
+                            src={otherProfile.avatar.getDirectURL()}
+                          />
+                        )}
+                        <AvatarFallback className="bg-purple-600 text-white text-[10px]">
+                          {otherProfile.displayName[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
                   )}
                   <div
                     className={`relative max-w-[72%] px-3.5 py-2 rounded-2xl text-sm cursor-pointer select-none ${
@@ -1029,25 +1159,89 @@ function ConversationView({
         </div>
       )}
 
-      {/* Emoji picker panel */}
+      {/* Voice preview */}
+      {voicePreview && (
+        <div className="px-3 py-2 shrink-0 border-t border-white/5 flex items-center gap-3">
+          <audio src={voicePreview} controls className="h-8 flex-1 rounded-xl">
+            <track kind="captions" />
+          </audio>
+          <button
+            type="button"
+            onClick={sendVoiceMessage}
+            className="px-4 py-1.5 rounded-full bg-gradient-to-br from-purple-600 to-violet-500 text-white text-xs font-semibold"
+          >
+            Send
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              URL.revokeObjectURL(voicePreview);
+              setVoicePreview(null);
+            }}
+            className="w-7 h-7 rounded-full bg-red-500/20 flex items-center justify-center"
+          >
+            <X className="w-3.5 h-3.5 text-red-400" />
+          </button>
+        </div>
+      )}
+
+      {/* Emoji / Sticker picker panel */}
       {showEmojiPicker && (
         <div
-          className="shrink-0 border-t border-white/5 bg-[#0f0f1a] px-3 py-3"
+          className="shrink-0 border-t border-white/5 bg-[#0f0f1a]"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           role="presentation"
         >
-          <div className="grid grid-cols-10 gap-1 max-h-32 overflow-y-auto no-scrollbar">
-            {EMOJI_LIST.map((emoji) => (
+          {/* Tabs */}
+          <div className="flex border-b border-white/5">
+            {(["emoji", "sticker"] as const).map((tab) => (
               <button
-                key={emoji}
+                key={tab}
                 type="button"
-                onClick={() => setText((t) => t + emoji)}
-                className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/10 rounded-lg transition-colors active:scale-90"
+                onClick={() => setEmojiTab(tab)}
+                className={`flex-1 py-2 text-xs font-semibold transition-colors ${emojiTab === tab ? "text-pink-400 border-b-2 border-pink-400" : "text-white/30"}`}
               >
-                {emoji}
+                {tab === "emoji" ? "😊 Emojis" : "🎭 Stickers"}
               </button>
             ))}
+          </div>
+          <div className="px-3 py-3">
+            {emojiTab === "emoji" ? (
+              <div className="grid grid-cols-10 gap-1 max-h-32 overflow-y-auto no-scrollbar">
+                {EMOJI_LIST.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setText((t) => t + emoji)}
+                    className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/10 rounded-lg transition-colors active:scale-90"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-8 gap-1 max-h-32 overflow-y-auto no-scrollbar">
+                {STICKER_LIST.map((sticker) => (
+                  <button
+                    key={sticker}
+                    type="button"
+                    onClick={async () => {
+                      setText("");
+                      try {
+                        await sendMessage.mutateAsync({
+                          to: otherUser,
+                          content: sticker,
+                        });
+                      } catch {}
+                    }}
+                    className="w-9 h-9 flex items-center justify-center text-2xl hover:bg-white/10 rounded-xl transition-colors active:scale-90"
+                  >
+                    {sticker}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1125,7 +1319,16 @@ function ConversationView({
         />
         <button
           type="button"
-          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0"
+          onMouseDown={startRecording}
+          onMouseUp={stopRecording}
+          onTouchStart={startRecording}
+          onTouchEnd={stopRecording}
+          className={`w-8 h-8 flex items-center justify-center shrink-0 transition-colors ${isRecording ? "text-red-400 animate-pulse" : "text-white/40"}`}
+          title={
+            isRecording
+              ? "Recording... release to stop"
+              : "Hold to record voice"
+          }
         >
           <Mic className="w-5 h-5" />
         </button>

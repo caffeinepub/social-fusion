@@ -20,18 +20,16 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { usePrivacy } from "../contexts/PrivacyContext";
+import { THEMES as SF_THEMES, useTheme } from "../contexts/ThemeContext";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 interface AppSettingsSheetProps {
   open: boolean;
   onClose: () => void;
 }
 
-const THEMES = [
-  { id: "dark", name: "Dark", bg: "#0a0a0f" },
-  { id: "amoled", name: "AMOLED", bg: "#000000" },
-  { id: "midnight", name: "Midnight", bg: "#050510" },
-  { id: "rose", name: "Rose Dark", bg: "#1a0a12" },
-];
+// Themes are imported from ThemeContext as SF_THEMES
 
 const ACCENTS = [
   { id: "pink", color: "#ec4899" },
@@ -117,20 +115,32 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deactivateConfirm, setDeactivateConfirm] = useState(false);
 
+  const { setTheme: setGlobalTheme, themeId: globalThemeId } = useTheme();
+  const { setMyPrivacy } = usePrivacy();
+  const { identity } = useInternetIdentity();
+
   useEffect(() => {
-    const themeBg = THEMES.find((t) => t.id === theme)?.bg ?? "#0a0a0f";
+    const themeBg = SF_THEMES.find((t) => t.id === theme)?.bg ?? "#0a0a0f";
     applyTheme(themeBg, accent);
-  }, [theme, accent]);
+  }, [accent, theme]);
 
   function setAndSaveTheme(id: string) {
     setTheme(id);
     saveSetting("sf_theme", id);
+    setGlobalTheme(id as any);
   }
 
   function setAndSaveAccent(color: string) {
     setAccent(color);
     saveSetting("sf_accent", color);
   }
+
+  // Sync privacy with PrivacyContext
+  useEffect(() => {
+    const principal = identity?.getPrincipal()?.toString();
+    if (!principal) return;
+    setMyPrivacy(principal, profileVisibility === "private");
+  }, [profileVisibility, identity, setMyPrivacy]);
 
   const ToggleRow = ({
     label,
@@ -279,14 +289,14 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                       </h3>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {THEMES.map((t) => (
+                      {SF_THEMES.map((t) => (
                         <button
                           key={t.id}
                           type="button"
                           data-ocid="settings.toggle"
                           onClick={() => setAndSaveTheme(t.id)}
                           className={`flex items-center gap-2 p-3 rounded-xl border transition-all ${
-                            theme === t.id
+                            theme === t.id || globalThemeId === t.id
                               ? "border-pink-500/60 bg-pink-500/10"
                               : "border-white/10 bg-white/5"
                           }`}
@@ -298,7 +308,7 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                           <span className="text-white/80 text-sm">
                             {t.name}
                           </span>
-                          {theme === t.id && (
+                          {(theme === t.id || globalThemeId === t.id) && (
                             <CheckCircle2 className="w-4 h-4 text-pink-400 ml-auto" />
                           )}
                         </button>

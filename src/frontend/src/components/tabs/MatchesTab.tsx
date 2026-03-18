@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
 import { MessageCircle } from "lucide-react";
+import { usePrivacy } from "../../contexts/PrivacyContext";
 import { useGetMatches, useGetUserProfile } from "../../hooks/useQueries";
 
 interface Props {
@@ -13,11 +14,12 @@ interface Props {
 export default function MatchesTab({ onUserClick, onMessageUser }: Props) {
   const { data: matchPrincipals, isLoading } = useGetMatches();
 
-  // Deduplicate by principal string ID
+  const { isPrivate } = usePrivacy();
+  // Deduplicate by principal string ID, filter private profiles
   const uniqueMatches = matchPrincipals
     ? Array.from(
         new Map(matchPrincipals.map((p) => [p.toString(), p])).values(),
-      )
+      ).filter((p) => !isPrivate(p.toString()))
     : [];
   const count = uniqueMatches.length;
 

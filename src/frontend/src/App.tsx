@@ -14,6 +14,8 @@ import MatchesTab from "./components/tabs/MatchesTab";
 import MessagesTab from "./components/tabs/MessagesTab";
 import ProfileTab from "./components/tabs/ProfileTab";
 import RequestsTab from "./components/tabs/RequestsTab";
+import { PrivacyProvider } from "./contexts/PrivacyContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import { useCallSignal } from "./hooks/useCallSignal";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import {
@@ -36,7 +38,11 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppInner />
+      <ThemeProvider>
+        <PrivacyProvider>
+          <AppInner />
+        </PrivacyProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
@@ -109,7 +115,6 @@ function MainApp() {
   const handleAcceptIncoming = () => {
     if (!incomingCall) return;
     broadcastAccept(incomingCall.callId);
-    // Find caller profile
     const found = allProfiles?.find(
       ([p]) => p.toString() === incomingCall.callerPrincipal,
     );
@@ -131,7 +136,6 @@ function MainApp() {
     broadcastReject(incomingCall.callId);
   };
 
-  // If we have an active call from incoming, show CallScreen
   if (globalCallMode && globalCallProfile) {
     return (
       <div className="app-container">
@@ -143,12 +147,10 @@ function MainApp() {
             >[0]["otherProfile"]
           }
           onEnd={() => {
-            if (activeCallId) {
-              // broadcastEnd would go here
-            }
             setGlobalCallMode(null);
             setGlobalCallProfile(undefined);
             setActiveCallId(null);
+            void activeCallId;
           }}
         />
       </div>
@@ -162,7 +164,6 @@ function MainApp() {
           <UserProfileView principal={viewingUser} onBack={handleBack} />
         </main>
         <BottomNav active={activeTab} onChange={setActiveTab} />
-        {/* Global incoming call overlay */}
         {incomingCall && (
           <IncomingCallOverlay
             profile={(() => {
@@ -232,7 +233,10 @@ function MainApp() {
               />
             )}
             {activeTab === "chats" && (
-              <MessagesTab onChatOpenChange={setChatOpen} />
+              <MessagesTab
+                onChatOpenChange={setChatOpen}
+                onViewProfile={handleUserClick}
+              />
             )}
             {activeTab === "profile" && <ProfileTab />}
           </motion.div>
@@ -250,7 +254,6 @@ function MainApp() {
         }}
       />
 
-      {/* Global incoming call overlay */}
       {incomingCall && (
         <IncomingCallOverlay
           profile={(() => {

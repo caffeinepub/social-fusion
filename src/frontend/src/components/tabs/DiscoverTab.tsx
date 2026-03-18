@@ -11,6 +11,7 @@ import {
 } from "motion/react";
 import { useRef, useState } from "react";
 import type { Profile } from "../../backend";
+import { usePrivacy } from "../../contexts/PrivacyContext";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
   useBlockedUsers,
@@ -404,6 +405,7 @@ function TinderSection({
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
   const { blockedSet } = useBlockedUsers();
+  const { isPrivate } = usePrivacy();
   const _tinderLike = useTinderLike();
   const _tinderPass = useTinderPass();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -414,12 +416,17 @@ function TinderSection({
   // Use queue profiles if available, otherwise fall back to allProfiles excluding self
   const profiles =
     queue && queue.length > 0
-      ? queue
+      ? queue.filter((_, i) => {
+          const entry = allProfiles?.[i];
+          if (!entry) return true;
+          return !isPrivate(entry[0].toString());
+        })
       : (allProfiles
           ?.filter(
             ([p]) =>
               p.toString() !== myPrincipal?.toString() &&
-              !blockedSet.has(p.toString()),
+              !blockedSet.has(p.toString()) &&
+              !isPrivate(p.toString()),
           )
           .map(([, prof]) => prof) ?? []);
   const currentProfile = profiles[currentIndex] ?? null;
