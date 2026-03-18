@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
-import { Heart, Search, Star, X } from "lucide-react";
+import { Bell, Heart, Search, Star, X, Zap } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -31,6 +31,15 @@ import SearchScreen from "../SearchScreen";
 import SpotlightSection from "../SpotlightSection";
 import StoryCreatorSheet from "../StoryCreatorSheet";
 import StoryViewer from "../StoryViewer";
+import {
+  HeartBurst,
+  MutualInterestsBadge,
+  NearbyUsersSection,
+  SafeReportButton,
+  ShakeToMatchButton,
+  SuperLikeButton,
+} from "../features/DiscoverFeatures";
+import { BookmarkToggleButton } from "../features/MatchFeatures";
 
 const CONFETTI_PIECES = Array.from({ length: 20 }, (_, i) => ({
   id: `piece-${i}`,
@@ -236,6 +245,7 @@ export default function DiscoverTab({
   onStoryClose,
 }: Props) {
   const [showLive, setShowLive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
   const [storyView, setStoryView] = useState<StoryViewState | null>(null);
@@ -244,6 +254,7 @@ export default function DiscoverTab({
   const { data: callerProfile } = useGetCallerProfile();
   const { data: myStories } = useGetStories(myPrincipal);
   const { data: allProfiles } = useGetAllProfiles();
+  const [_shakeName, _setShakeName] = useState<string | null>(null);
 
   const myStoryCount = myStories?.length ?? 0;
 
@@ -306,17 +317,18 @@ export default function DiscoverTab({
       className="flex flex-col h-full"
       style={{ background: "var(--sf-bg, #0a0a0f)" }}
     >
-      {/* Single-row header */}
+      {/* Top Header Bar */}
       <div
-        className="shrink-0 flex items-center justify-between px-4"
+        className="shrink-0 flex items-center gap-2 px-3"
         style={{
-          height: 56,
+          height: 52,
           background: "rgba(10,10,15,0.97)",
           borderBottom: "1px solid rgba(255,255,255,0.05)",
         }}
       >
+        {/* Left: Discover text */}
         <span
-          className="text-xl font-black tracking-tight"
+          className="text-lg font-black tracking-tight shrink-0"
           style={{
             background:
               "linear-gradient(90deg, #ec4899 0%, #a855f7 50%, #ec4899 100%)",
@@ -328,33 +340,37 @@ export default function DiscoverTab({
         >
           Discover
         </span>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
+        {/* Center: Live search input */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40 pointer-events-none" />
+          <input
+            type="text"
             data-ocid="discover.search_input"
-            onClick={() => setShowSearch(true)}
-            className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <Search className="w-4 h-4 text-white/70" />
-          </button>
-          <button
-            type="button"
-            data-ocid="discover.button"
-            onClick={() => setShowLive(true)}
-            className="flex items-center gap-1 bg-red-600/90 text-white text-xs font-bold px-2.5 py-1 rounded-full"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            LIVE
-          </button>
-          <button
-            type="button"
-            data-ocid="discover.toggle"
-            onClick={() => onNotifOpen?.()}
-            className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <Heart className="w-4 h-4 text-white/70" />
-          </button>
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search people..."
+            className="w-full pl-8 pr-3 py-1.5 rounded-full bg-white/10 text-white text-sm placeholder:text-white/40 outline-none border border-white/10 focus:border-pink-500/50 transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2"
+            >
+              <X className="w-3.5 h-3.5 text-white/40" />
+            </button>
+          )}
         </div>
+        {/* Right: Notification bell */}
+        <button
+          type="button"
+          data-ocid="discover.toggle"
+          onClick={() => onNotifOpen?.()}
+          className="w-9 h-9 shrink-0 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform relative"
+        >
+          <Bell className="w-4 h-4 text-white/70" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
+        </button>
       </div>
 
       {/* Story row */}
@@ -511,12 +527,22 @@ export default function DiscoverTab({
           <TinderSection
             onUserClick={onUserClick}
             onLikeSound={playLikeSound}
+            searchQuery={searchQuery}
           />
         </div>
 
         {/* Quick Send Reactions */}
         <QuickReactionRow />
       </div>
+
+      {/* Other Profiles - horizontal scroll */}
+      <OtherProfilesRow
+        profiles={(allProfiles ?? [])
+          .filter(([p]) => p.toString() !== myPrincipal?.toString())
+          .slice(0, 12)}
+        onUserClick={onUserClick}
+        searchQuery={searchQuery}
+      />
 
       <StoryCreatorSheet
         open={storyCreatorOpen}
@@ -590,6 +616,89 @@ function StoryRingAvatarWithStories({
         {profile.displayName}
       </span>
     </button>
+  );
+}
+
+function OtherProfilesRow({
+  profiles,
+  onUserClick,
+  searchQuery = "",
+}: {
+  profiles: [Principal, Profile][];
+  onUserClick: (p: Principal) => void;
+  searchQuery?: string;
+}) {
+  const filtered = searchQuery
+    ? profiles.filter(
+        ([, p]) =>
+          p.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.location?.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : profiles;
+  if (filtered.length === 0) return null;
+  return (
+    <div className="shrink-0 pb-1">
+      <div className="px-4 py-1.5 flex items-center justify-between">
+        <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">
+          {searchQuery ? "Search Results" : "You May Like"}
+        </span>
+        <span className="text-pink-400 text-xs">{filtered.length} people</span>
+      </div>
+      <div className="flex gap-2.5 px-4 overflow-x-auto no-scrollbar pb-1">
+        {filtered.map(([principal, profile]) => (
+          <button
+            key={principal.toString()}
+            type="button"
+            data-ocid="discover.button"
+            onClick={() => onUserClick(principal)}
+            className="shrink-0 relative flex flex-col items-center rounded-2xl overflow-hidden active:scale-95 transition-transform"
+            style={{
+              width: 110,
+              minHeight: 148,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <div className="w-full h-20 relative overflow-hidden">
+              {profile.avatar ? (
+                <img
+                  src={profile.avatar.getDirectURL()}
+                  alt={profile.displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-pink-500/50 to-purple-600/50 flex items-center justify-center">
+                  <span className="text-white text-2xl font-bold">
+                    {profile.displayName[0]?.toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="p-1.5 w-full">
+              <p className="text-white text-xs font-semibold truncate">
+                {profile.displayName}
+              </p>
+              {profile.location && (
+                <p className="text-white/40 text-[10px] truncate">
+                  📍 {profile.location}
+                </p>
+              )}
+            </div>
+            <div className="absolute top-1.5 right-1.5 flex gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                className="w-6 h-6 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"
+              >
+                <Heart className="w-3 h-3 text-pink-400" />
+              </button>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -803,7 +912,12 @@ function ProfileCardCarousel({
 function TinderSection({
   onUserClick,
   onLikeSound,
-}: { onUserClick: (p: Principal) => void; onLikeSound: () => void }) {
+  searchQuery = "",
+}: {
+  onUserClick: (p: Principal) => void;
+  onLikeSound: () => void;
+  searchQuery?: string;
+}) {
   const { data: queue, isLoading } = useGetTinderQueue();
   const { data: allProfiles } = useGetAllProfiles();
   const { data: callerProfile } = useGetCallerProfile();
@@ -818,6 +932,17 @@ function TinderSection({
   const [showConfetti, setShowConfetti] = useState(false);
   const [lastMatchName, setLastMatchName] = useState("");
   const [sentReaction, setSentReaction] = useState<string | null>(null);
+  const [heartBurst, setHeartBurst] = useState(false);
+  const [_superLiked, setSuperLiked] = useState(false);
+  let lastTapTime = 0;
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapTime < 300) {
+      setHeartBurst(true);
+      handleLike();
+    }
+    lastTapTime = now;
+  };
 
   type ProfileEntry = {
     prof: Profile;
@@ -855,11 +980,20 @@ function TinderSection({
     );
   })();
 
-  const sortedProfiles = [...profilesWithPrincipal].sort(
-    (a, b) =>
-      scoreProfile(b.prof, callerProfile, myPrincipal, b.principalStr) -
-      scoreProfile(a.prof, callerProfile, myPrincipal, a.principalStr),
-  );
+  const sortedProfiles = [...profilesWithPrincipal]
+    .filter((entry) =>
+      searchQuery
+        ? entry.prof.displayName
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          entry.prof.location?.toLowerCase().includes(searchQuery.toLowerCase())
+        : true,
+    )
+    .sort(
+      (a, b) =>
+        scoreProfile(b.prof, callerProfile, myPrincipal, b.principalStr) -
+        scoreProfile(a.prof, callerProfile, myPrincipal, a.principalStr),
+    );
 
   const current = sortedProfiles[currentIndex] ?? null;
 
@@ -1016,10 +1150,14 @@ function TinderSection({
         dragConstraints={{ left: 0, right: 0 }}
         style={{ x, rotate }}
         onDragEnd={handleDragEnd}
-        onClick={() => onUserClick(current.principal)}
+        onClick={() => {
+          handleDoubleTap();
+          if (Date.now() - lastTapTime > 300) onUserClick(current.principal);
+        }}
         className="relative w-full max-w-xs cursor-pointer"
         whileTap={{ scale: 0.98 }}
       >
+        {heartBurst && <HeartBurst onDone={() => setHeartBurst(false)} />}
         {/* Like/Pass overlays */}
         <motion.div
           style={{ opacity: likeOpacity }}
@@ -1058,6 +1196,24 @@ function TinderSection({
             {prof.location && (
               <p className="text-white/40 text-xs">📍 {prof.location}</p>
             )}
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <MutualInterestsBadge
+                myInterests={callerProfile?.interests}
+                theirInterests={prof.interests}
+              />
+              <BookmarkToggleButton
+                id={principalStr}
+                name={prof.displayName ?? ""}
+                type="profile"
+              />
+              <SafeReportButton userName={prof.displayName ?? "User"} />
+              <SuperLikeButton
+                onSuperLike={() => {
+                  setSuperLiked(true);
+                  handleLike();
+                }}
+              />
+            </div>
           </div>
 
           {/* Per-card quick reactions */}

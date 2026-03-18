@@ -44,6 +44,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence as AP2 } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { ExternalBlob } from "../../backend";
 import type { Profile } from "../../backend";
@@ -64,6 +65,22 @@ import FollowListSheet from "../FollowListSheet";
 import GiftSheet from "../GiftSheet";
 import MoodBoardSection from "../MoodBoardSection";
 import { PremiumScreen } from "../PremiumScreen";
+import {
+  AstrologyBadge,
+  LiveStreamModal,
+  ProfileMusicSection,
+  ProfileQRCode,
+  ReferralCard,
+  RelationshipGoalBadge,
+  RelationshipGoalPicker,
+  StatusMessageBadge,
+  StatusMessagePicker,
+  StoryPollCreator,
+  VideoStatusBubble,
+  VoiceIntroduction,
+  VoiceNoteStoryOption,
+  getZodiac,
+} from "../features/ProfileFeatures";
 
 const MOODS = ["😊", "🎉", "❤️", "🔥", "😴"];
 
@@ -123,6 +140,9 @@ export default function ProfileTab() {
     } catch {}
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const [userStatus, setUserStatus] = useState("");
+  const [relGoal, setRelGoal] = useState("");
   const [giftOpen, setGiftOpen] = useState(false);
   const [followSheet, setFollowSheet] = useState<
     "followers" | "following" | null
@@ -469,6 +489,7 @@ export default function ProfileTab() {
           <button
             type="button"
             data-ocid="profile.primary_button"
+            onClick={() => setLiveOpen(true)}
             className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-full bg-gradient-to-r from-red-500 to-rose-600 text-white text-sm font-semibold shadow-lg shadow-red-500/20"
           >
             <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -492,6 +513,70 @@ export default function ProfileTab() {
             Gifts
           </button>
         </div>
+      </div>
+
+      {/* New Features: Status, Astrology, RelGoal, QR */}
+      <div className="px-4 mt-4 shrink-0 flex flex-col gap-3">
+        {/* Status row */}
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+          <span className="text-sm">💬</span>
+          <div className="flex-1">
+            <StatusMessageBadge status={userStatus} />
+            {!userStatus && (
+              <span className="text-xs text-white/30 italic">
+                No status set
+              </span>
+            )}
+          </div>
+          <StatusMessagePicker onSave={setUserStatus} />
+        </div>
+        {/* Astrology + QR row */}
+        <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+          <AstrologyBadge birthday={profile?.birthday} />
+          <ProfileQRCode name={profile?.displayName ?? "You"} />
+        </div>
+        {/* Relationship Goal */}
+        <RelationshipGoalPicker value={relGoal} onChange={setRelGoal} />
+        {relGoal && (
+          <div className="flex">
+            <RelationshipGoalBadge goal={relGoal} />
+          </div>
+        )}
+      </div>
+
+      {/* Video Status + Voice Intro */}
+      <div className="px-4 mt-4 shrink-0 grid grid-cols-2 gap-3">
+        <VideoStatusBubble />
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-white/40 text-xs">Story Polls</p>
+          <div className="w-full">
+            <StoryPollCreator />
+          </div>
+        </div>
+      </div>
+
+      {/* Profile Music */}
+      <div className="px-4 mt-4 shrink-0">
+        <ProfileMusicSection />
+      </div>
+
+      {/* Voice Introduction */}
+      <div className="px-4 mt-4 shrink-0">
+        <VoiceIntroduction />
+      </div>
+
+      {/* Voice Note Story Option */}
+      <div className="px-4 mt-4 shrink-0">
+        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+          <VoiceNoteStoryOption />
+        </div>
+      </div>
+
+      {/* Referral */}
+      <div className="px-4 mt-4 shrink-0">
+        <ReferralCard
+          principal={identity?.getPrincipal()?.toString() ?? "anon"}
+        />
       </div>
 
       {/* Privacy & Membership card */}
@@ -769,6 +854,7 @@ export default function ProfileTab() {
       </AnimatePresence>
 
       <PremiumScreen open={premiumOpen} onClose={() => setPremiumOpen(false)} />
+      {liveOpen && <LiveStreamModal onClose={() => setLiveOpen(false)} />}
       <AppSettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

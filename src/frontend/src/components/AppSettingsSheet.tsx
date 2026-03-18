@@ -1,23 +1,31 @@
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bell,
   CheckCircle2,
   ChevronRight,
+  Clock,
+  Database,
   Download,
+  Globe,
   HelpCircle,
   Info,
+  KeyRound,
   Lock,
   MessageSquare,
   Moon,
   Palette,
   Settings2,
+  ShieldCheck,
   ShieldOff,
+  Sliders,
   Sparkles,
   Trash2,
   Type,
   User,
   X,
+  Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
@@ -115,6 +123,40 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deactivateConfirm, setDeactivateConfirm] = useState(false);
+  // Advanced Settings
+  const [boostScheduler, setBoostScheduler] = useState(() =>
+    loadSetting("adv_boostScheduler", false),
+  );
+  const [boostTime, setBoostTime] = useState(() =>
+    loadSetting("adv_boostTime", "20:00-22:00"),
+  );
+  const [advReadReceipts, setAdvReadReceipts] = useState(() =>
+    loadSetting("adv_readReceipts", true),
+  );
+  const [incognitoMode, setIncognitoMode] = useState(() =>
+    loadSetting("adv_incognito", false),
+  );
+  const [autoTranslate, setAutoTranslate] = useState(() =>
+    loadSetting("adv_autoTranslate", false),
+  );
+  const [smartReply, setSmartReply] = useState(() =>
+    loadSetting("adv_smartReply", true),
+  );
+  const [dailyMatchLimit, setDailyMatchLimit] = useState<number[]>(() =>
+    loadSetting("adv_dailyMatch", [20]),
+  );
+  const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">(() =>
+    loadSetting("adv_distUnit", "km"),
+  );
+  const [activityStatus, setActivityStatus] = useState(() =>
+    loadSetting("adv_actStatus", "Everyone"),
+  );
+  const [dataSheetOpen, setDataSheetOpen] = useState(false);
+  const [appLock, setAppLock] = useState(() =>
+    loadSetting("adv_appLock", false),
+  );
+  const [pinSetup, setPinSetup] = useState("");
+  const [pinOpen, setPinOpen] = useState(false);
 
   const { setTheme: setGlobalTheme, themeId: globalThemeId } = useTheme();
   const { setMyPrivacy } = usePrivacy();
@@ -256,22 +298,29 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
               defaultValue="customize"
               className="flex-1 flex flex-col min-h-0"
             >
-              <TabsList className="mx-4 mt-3 shrink-0 grid grid-cols-4 bg-white/5 h-10">
-                <TabsTrigger value="customize" className="text-[11px] px-1">
-                  <Palette className="w-3 h-3 mr-1" />
+              <TabsList className="mx-4 mt-3 shrink-0 grid grid-cols-5 bg-white/5 h-10">
+                <TabsTrigger value="customize" className="text-[10px] px-0.5">
+                  <Palette className="w-3 h-3 mr-0.5" />
                   Theme
                 </TabsTrigger>
-                <TabsTrigger value="privacy" className="text-[11px] px-1">
-                  <Lock className="w-3 h-3 mr-1" />
+                <TabsTrigger value="privacy" className="text-[10px] px-0.5">
+                  <Lock className="w-3 h-3 mr-0.5" />
                   Privacy
                 </TabsTrigger>
-                <TabsTrigger value="notifications" className="text-[11px] px-1">
-                  <Bell className="w-3 h-3 mr-1" />
+                <TabsTrigger
+                  value="notifications"
+                  className="text-[10px] px-0.5"
+                >
+                  <Bell className="w-3 h-3 mr-0.5" />
                   Notifs
                 </TabsTrigger>
-                <TabsTrigger value="account" className="text-[11px] px-1">
-                  <User className="w-3 h-3 mr-1" />
+                <TabsTrigger value="account" className="text-[10px] px-0.5">
+                  <User className="w-3 h-3 mr-0.5" />
                   Account
+                </TabsTrigger>
+                <TabsTrigger value="advanced" className="text-[10px] px-0.5">
+                  <Sliders className="w-3 h-3 mr-0.5" />
+                  More
                 </TabsTrigger>
               </TabsList>
 
@@ -831,6 +880,399 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                             Cancel
                           </button>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+              {/* Advanced Settings Tab */}
+              <TabsContent
+                value="advanced"
+                className="flex-1 overflow-y-auto px-4 pb-8"
+              >
+                <div className="mt-4 flex flex-col gap-3">
+                  <p className="text-white/40 text-xs uppercase tracking-wider font-semibold mb-1 flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-yellow-400" /> Advanced
+                    Settings
+                  </p>
+
+                  {/* 1. Profile Boost Scheduler */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-yellow-400" />
+                        <div>
+                          <p className="text-white/80 text-sm font-medium">
+                            Profile Boost Scheduler
+                          </p>
+                          <p className="text-white/40 text-xs">
+                            {boostScheduler
+                              ? `Boost active ${boostTime} daily`
+                              : "Schedule daily boost window"}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        data-ocid="settings.switch"
+                        checked={boostScheduler}
+                        onCheckedChange={(v) => {
+                          setBoostScheduler(v);
+                          saveSetting("adv_boostScheduler", v);
+                        }}
+                      />
+                    </div>
+                    {boostScheduler && (
+                      <div className="mt-2 flex gap-2">
+                        <select
+                          value={boostTime}
+                          onChange={(e) => {
+                            setBoostTime(e.target.value);
+                            saveSetting("adv_boostTime", e.target.value);
+                          }}
+                          className="flex-1 bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 outline-none border border-white/10"
+                        >
+                          <option value="08:00-10:00">8am – 10am</option>
+                          <option value="12:00-14:00">12pm – 2pm</option>
+                          <option value="18:00-20:00">6pm – 8pm</option>
+                          <option value="20:00-22:00">8pm – 10pm</option>
+                          <option value="22:00-00:00">10pm – 12am</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Read Receipts */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-400" />
+                      <div>
+                        <p className="text-white/80 text-sm font-medium">
+                          Read Receipts
+                        </p>
+                        <p className="text-white/40 text-xs">
+                          Show double-tick read receipts in chat
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      data-ocid="settings.switch"
+                      checked={advReadReceipts}
+                      onCheckedChange={(v) => {
+                        setAdvReadReceipts(v);
+                        saveSetting("adv_readReceipts", v);
+                      }}
+                    />
+                  </div>
+
+                  {/* 3. Incognito Mode */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-purple-400" />
+                      <div>
+                        <p className="text-white/80 text-sm font-medium">
+                          Incognito Mode
+                        </p>
+                        <p className="text-white/40 text-xs">
+                          Browse without showing in "Who Viewed Me"
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      data-ocid="settings.switch"
+                      checked={incognitoMode}
+                      onCheckedChange={(v) => {
+                        setIncognitoMode(v);
+                        saveSetting("adv_incognito", v);
+                      }}
+                    />
+                  </div>
+
+                  {/* 4. Auto-Translate */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-blue-400" />
+                      <div>
+                        <p className="text-white/80 text-sm font-medium">
+                          Auto-Translate Messages
+                        </p>
+                        <p className="text-white/40 text-xs">
+                          Translate incoming messages to your language
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      data-ocid="settings.switch"
+                      checked={autoTranslate}
+                      onCheckedChange={(v) => {
+                        setAutoTranslate(v);
+                        saveSetting("adv_autoTranslate", v);
+                      }}
+                    />
+                  </div>
+
+                  {/* 5. Smart Reply Suggestions */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-pink-400" />
+                      <div>
+                        <p className="text-white/80 text-sm font-medium">
+                          Smart Reply Suggestions
+                        </p>
+                        <p className="text-white/40 text-xs">
+                          Show AI-suggested quick replies above input
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      data-ocid="settings.switch"
+                      checked={smartReply}
+                      onCheckedChange={(v) => {
+                        setSmartReply(v);
+                        saveSetting("adv_smartReply", v);
+                      }}
+                    />
+                  </div>
+
+                  {/* 6. Daily Match Limit */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap className="w-4 h-4 text-orange-400" />
+                      <div className="flex-1">
+                        <p className="text-white/80 text-sm font-medium">
+                          Daily Match Limit
+                        </p>
+                        <p className="text-white/40 text-xs">
+                          Max {dailyMatchLimit[0]} likes/swipes per day
+                        </p>
+                      </div>
+                      <span className="text-white font-bold text-sm">
+                        {dailyMatchLimit[0]}
+                      </span>
+                    </div>
+                    <Slider
+                      data-ocid="settings.toggle"
+                      min={5}
+                      max={50}
+                      step={5}
+                      value={dailyMatchLimit}
+                      onValueChange={(v) => {
+                        setDailyMatchLimit(v);
+                        saveSetting("adv_dailyMatch", v);
+                      }}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-white/30 text-[10px] mt-1">
+                      <span>5</span>
+                      <span>50</span>
+                    </div>
+                  </div>
+
+                  {/* 7. Distance Unit */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sliders className="w-4 h-4 text-cyan-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        Distance Unit
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {(["km", "miles"] as const).map((u) => (
+                        <button
+                          key={u}
+                          type="button"
+                          data-ocid="settings.toggle"
+                          onClick={() => {
+                            setDistanceUnit(u);
+                            saveSetting("adv_distUnit", u);
+                          }}
+                          className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+                          style={
+                            distanceUnit === u
+                              ? {
+                                  background:
+                                    "linear-gradient(135deg, #ec4899, #a855f7)",
+                                  color: "white",
+                                }
+                              : {
+                                  background: "rgba(255,255,255,0.05)",
+                                  color: "rgba(255,255,255,0.5)",
+                                }
+                          }
+                        >
+                          {u === "km" ? "Kilometers" : "Miles"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 8. Activity Status */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="w-4 h-4 text-emerald-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        Activity Status
+                      </p>
+                      <p className="text-white/40 text-xs ml-auto">
+                        Who sees you as online
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {["Everyone", "Matches Only", "Nobody"].map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          data-ocid="settings.radio"
+                          onClick={() => {
+                            setActivityStatus(opt);
+                            saveSetting("adv_actStatus", opt);
+                          }}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors"
+                          style={
+                            activityStatus === opt
+                              ? {
+                                  background: "rgba(236,72,153,0.15)",
+                                  border: "1px solid rgba(236,72,153,0.4)",
+                                }
+                              : {
+                                  background: "rgba(255,255,255,0.03)",
+                                  border: "1px solid rgba(255,255,255,0.08)",
+                                }
+                          }
+                        >
+                          <div
+                            className="w-4 h-4 rounded-full border-2 flex items-center justify-center"
+                            style={{
+                              borderColor:
+                                activityStatus === opt
+                                  ? "#ec4899"
+                                  : "rgba(255,255,255,0.3)",
+                            }}
+                          >
+                            {activityStatus === opt && (
+                              <div className="w-2 h-2 rounded-full bg-pink-400" />
+                            )}
+                          </div>
+                          <span className="text-white/80 text-sm">{opt}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 9. Data & Storage */}
+                  <button
+                    type="button"
+                    data-ocid="settings.button"
+                    onClick={() => setDataSheetOpen(true)}
+                    className="p-3 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between w-full"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Database className="w-4 h-4 text-indigo-400" />
+                      <div className="text-left">
+                        <p className="text-white/80 text-sm font-medium">
+                          Data & Storage
+                        </p>
+                        <p className="text-white/40 text-xs">
+                          Cache: ~4.2 MB · Tap to manage
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-white/30" />
+                  </button>
+                  {dataSheetOpen && (
+                    <div className="p-4 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                      <p className="text-white/70 text-sm font-medium mb-3">
+                        Cache & Storage
+                      </p>
+                      <div className="flex justify-between text-xs text-white/50 mb-3">
+                        <span>App Cache</span>
+                        <span>4.2 MB</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-white/50 mb-3">
+                        <span>Media Cache</span>
+                        <span>18.7 MB</span>
+                      </div>
+                      <button
+                        type="button"
+                        data-ocid="settings.delete_button"
+                        onClick={() => {
+                          localStorage.clear();
+                          setDataSheetOpen(false);
+                        }}
+                        className="w-full py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-medium"
+                      >
+                        Clear All Cache
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDataSheetOpen(false)}
+                        className="w-full py-2 mt-2 text-white/40 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 10. App Lock */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="w-4 h-4 text-amber-400" />
+                        <div>
+                          <p className="text-white/80 text-sm font-medium">
+                            App Lock
+                          </p>
+                          <p className="text-white/40 text-xs">
+                            {appLock
+                              ? "PIN enabled · tap to change"
+                              : "Require PIN to open app"}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        data-ocid="settings.switch"
+                        checked={appLock}
+                        onCheckedChange={(v) => {
+                          setAppLock(v);
+                          saveSetting("adv_appLock", v);
+                          if (v) setPinOpen(true);
+                        }}
+                      />
+                    </div>
+                    {pinOpen && (
+                      <div className="mt-3">
+                        <p className="text-white/50 text-xs mb-2">
+                          Enter 4-digit PIN:
+                        </p>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          value={pinSetup}
+                          onChange={(e) =>
+                            setPinSetup(
+                              e.target.value.replace(/\D/g, "").slice(0, 4),
+                            )
+                          }
+                          placeholder="••••"
+                          className="w-full bg-white/10 text-white text-center text-xl tracking-[0.5em] rounded-lg px-3 py-2 outline-none border border-white/20 focus:border-pink-500/50"
+                        />
+                        {pinSetup.length === 4 && (
+                          <button
+                            type="button"
+                            data-ocid="settings.confirm_button"
+                            onClick={() => {
+                              saveSetting("adv_pin", pinSetup);
+                              setPinOpen(false);
+                              setPinSetup("");
+                            }}
+                            className="w-full mt-2 py-2 rounded-lg text-sm font-semibold text-white"
+                            style={{
+                              background:
+                                "linear-gradient(135deg, #ec4899, #a855f7)",
+                            }}
+                          >
+                            Set PIN
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

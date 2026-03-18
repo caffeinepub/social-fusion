@@ -6,6 +6,7 @@ import type { Principal } from "@icp-sdk/core/principal";
 import {
   ArrowLeft,
   Camera,
+  Clock,
   Edit,
   Image,
   Inbox,
@@ -42,6 +43,18 @@ import IcebreakerCard, { getRandomIcebreaker } from "../IcebreakerCard";
 import IncomingCallOverlay from "../IncomingCallOverlay";
 import LoveTrackScreen from "../LoveTrackScreen";
 import OutgoingCallOverlay from "../OutgoingCallOverlay";
+import {
+  BUBBLE_THEMES,
+  BubbleThemePicker,
+  CHAT_WALLPAPERS,
+  ChatPollModal,
+  ChatWallpaperPicker,
+  CustomReactionPanel,
+  DisappearingHeader,
+  DisappearingMessageToggle,
+  LoveLetterModal,
+  PollMessage,
+} from "../features/ChatFeatures";
 
 const REACTION_EMOJIS = ["❤️", "🔥", "😂", "😮", "😢", "👏"];
 
@@ -723,9 +736,23 @@ function ConversationView({
   } | null>(null);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [chatTheme, setChatTheme] = useState(CHAT_THEMES[0]);
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [polls, setPolls] = useState<
+    { question: string; options: { text: string; votes: number }[] }[]
+  >([]);
+  const [_disappearMode, _setDisappearMode] = useState("off");
+  const [chatWallpaper, setChatWallpaper] = useState("");
+  const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [_bubbleTheme, _setBubbleTheme] = useState(BUBBLE_THEMES[0]);
+  const [_showExtras, _setShowExtras] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiTab, setEmojiTab] = useState<"emoji" | "sticker">("emoji");
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [scheduledMessages, setScheduledMessages] = useState<
+    { content: string; sendAt: string }[]
+  >([]);
   const [showMsgSearch, setShowMsgSearch] = useState(false);
   const [msgSearchQuery, setMsgSearchQuery] = useState("");
   const [pinnedMsg, setPinnedMsg] = useState<string | null>(null);
@@ -859,7 +886,10 @@ function ConversationView({
       data-ocid="messages.dialog"
       className="flex flex-col h-full"
       style={{
-        background: chatTheme.bg,
+        background: chatWallpaper ? `${chatTheme.bg}` : chatTheme.bg,
+        backgroundImage: chatWallpaper || undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
       }}
       onClick={() => {
         setContextMenu(null);
@@ -918,6 +948,24 @@ function ConversationView({
             title="Chat theme"
           >
             <Palette className="w-4 h-4 text-white/70" />
+          </button>
+          <button
+            type="button"
+            data-ocid="messages.toggle"
+            onClick={() => setShowWallpaperPicker((v) => !v)}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            title="Chat wallpaper"
+          >
+            <span className="text-sm">🌅</span>
+          </button>
+          <button
+            type="button"
+            data-ocid="messages.toggle"
+            onClick={() => setShowWallpaperPicker((v) => !v)}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            title="Chat wallpaper"
+          >
+            <span className="text-sm">🌅</span>
           </button>
 
           <AnimatePresence>
@@ -1145,6 +1193,15 @@ function ConversationView({
             className="flex flex-col items-center justify-center py-8 text-center gap-4"
           >
             <p className="text-white/30 text-sm">No messages yet. Say hi! 👋</p>
+            {polls.map((poll, pi) => (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: indexed polls
+                key={`poll-msg-${pi}`}
+                className="flex justify-start mb-2 px-2"
+              >
+                <PollMessage question={poll.question} options={poll.options} />
+              </div>
+            ))}
             {isEmptyChat && showIcebreaker && (
               <IcebreakerCard question={icebreaker} />
             )}
@@ -1442,6 +1499,14 @@ function ConversationView({
         </div>
         <button
           type="button"
+          title="Create Poll"
+          onClick={() => setShowPollModal(true)}
+          className="w-8 h-8 flex items-center justify-center shrink-0 opacity-40 hover:opacity-80 transition-colors text-[16px]"
+        >
+          📊
+        </button>
+        <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             setShowGifPicker((v) => !v);
@@ -1464,25 +1529,36 @@ function ConversationView({
           <SmilePlus className="w-5 h-5" />
         </button>
         {text.trim() ? (
-          <Button
-            type="submit"
-            data-ocid="messages.submit_button"
-            size="sm"
-            disabled={sendMessage.isPending}
-            className="w-8 h-8 p-0 rounded-full bg-gradient-to-br from-purple-600 to-violet-500 border-0 shrink-0"
-          >
-            {sendMessage.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <svg
-                viewBox="0 0 24 24"
-                className="w-3.5 h-3.5 fill-white"
-                aria-hidden="true"
-              >
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-            )}
-          </Button>
+          <>
+            <button
+              type="button"
+              data-ocid="messages.button"
+              onClick={() => setShowScheduler((v) => !v)}
+              title="Schedule message"
+              className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0"
+            >
+              <Clock className="w-4 h-4 text-white/50" />
+            </button>
+            <Button
+              type="submit"
+              data-ocid="messages.submit_button"
+              size="sm"
+              disabled={sendMessage.isPending}
+              className="w-8 h-8 p-0 rounded-full bg-gradient-to-br from-purple-600 to-violet-500 border-0 shrink-0"
+            >
+              {sendMessage.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-3.5 h-3.5 fill-white"
+                  aria-hidden="true"
+                >
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              )}
+            </Button>
+          </>
         ) : (
           <button
             type="button"
@@ -1493,8 +1569,6 @@ function ConversationView({
           </button>
         )}
       </form>
-
-      {/* Call overlays */}
       <AnimatePresence>
         {activeCall && (
           <CallScreen
@@ -1508,7 +1582,7 @@ function ConversationView({
         {outgoingCall && (
           <OutgoingCallOverlay
             profile={otherProfile}
-            mode={outgoingCall}
+            mode={outgoingCall as "voice" | "video"}
             onCancel={() => setOutgoingCall(null)}
           />
         )}
@@ -1517,7 +1591,7 @@ function ConversationView({
         {incomingCallMode && (
           <IncomingCallOverlay
             profile={otherProfile}
-            mode={incomingCallMode}
+            mode={incomingCallMode as "voice" | "video"}
             onAccept={() => {
               const m = incomingCallMode;
               setIncomingCallMode(null);
@@ -1527,8 +1601,6 @@ function ConversationView({
           />
         )}
       </AnimatePresence>
-
-      {/* GIF Picker */}
       <GifPicker
         open={showGifPicker}
         onClose={() => setShowGifPicker(false)}
@@ -1538,8 +1610,88 @@ function ConversationView({
           } catch {}
         }}
       />
-
-      {/* Forward Message Sheet */}
+      {showScheduler && (
+        <div className="px-3 pb-2 bg-white/5 border-t border-white/10 shrink-0">
+          <p className="text-white/50 text-xs py-2 font-semibold">
+            📅 Schedule Message
+          </p>
+          <div className="flex gap-2 items-center">
+            <input
+              type="datetime-local"
+              value={scheduleDate}
+              onChange={(e) => setScheduleDate(e.target.value)}
+              className="flex-1 bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 outline-none border border-white/15"
+            />
+            <button
+              type="button"
+              data-ocid="messages.confirm_button"
+              onClick={() => {
+                if (text.trim() && scheduleDate) {
+                  setScheduledMessages((prev) => [
+                    ...prev,
+                    { content: text, sendAt: scheduleDate },
+                  ]);
+                  setText("");
+                  setScheduleDate("");
+                  setShowScheduler(false);
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #ec4899, #a855f7)",
+              }}
+            >
+              Schedule
+            </button>
+          </div>
+          {scheduledMessages.length > 0 && (
+            <div className="mt-2">
+              {scheduledMessages.map((sm, _i) => (
+                <div
+                  key={`sched-${sm.sendAt}-${sm.content.slice(0, 8)}`}
+                  className="flex items-center gap-2 py-1"
+                >
+                  <span className="text-yellow-400 text-xs">⏰</span>
+                  <p className="text-white/60 text-xs flex-1 truncate">
+                    {sm.content}
+                  </p>
+                  <p className="text-white/30 text-[10px]">
+                    {sm.sendAt.replace("T", " ")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {showWallpaperPicker && (
+        <div className="px-3 pb-3 bg-black/40 backdrop-blur-sm border-t border-white/10 shrink-0">
+          <div className="flex items-center justify-between py-2">
+            <p className="text-white/70 text-xs font-semibold">
+              🎨 Chat Wallpaper
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowWallpaperPicker(false)}
+              className="text-white/40 text-xs"
+            >
+              ✕
+            </button>
+          </div>
+          <ChatWallpaperPicker
+            onSelect={(w) => {
+              setChatWallpaper(w);
+              setShowWallpaperPicker(false);
+            }}
+          />
+        </div>
+      )}
+      {showPollModal && (
+        <ChatPollModal
+          onClose={() => setShowPollModal(false)}
+          onSend={(poll) => setPolls((p) => [...p, poll])}
+        />
+      )}
       {showForwardSheet && forwardMsg && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div
