@@ -84,6 +84,7 @@ function MainApp() {
   const [viewingUser, setViewingUser] = useState<Principal | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
   const [globalCallMode, setGlobalCallMode] = useState<
     "voice" | "video" | null
   >(null);
@@ -111,7 +112,6 @@ function MainApp() {
   const handleUserClick = (p: Principal) => setViewingUser(p);
   const handleBack = () => setViewingUser(null);
 
-  // Global incoming call handler
   const handleAcceptIncoming = () => {
     if (!incomingCall) return;
     broadcastAccept(incomingCall.callId);
@@ -221,6 +221,8 @@ function MainApp() {
               <DiscoverTab
                 onUserClick={handleUserClick}
                 onNotifOpen={() => setNotifOpen(true)}
+                onStoryOpen={() => setStoryOpen(true)}
+                onStoryClose={() => setStoryOpen(false)}
               />
             )}
             {activeTab === "requests" && (
@@ -243,7 +245,9 @@ function MainApp() {
         </AnimatePresence>
       </main>
 
-      {!chatOpen && <BottomNav active={activeTab} onChange={setActiveTab} />}
+      {!chatOpen && !storyOpen && (
+        <BottomNav active={activeTab} onChange={setActiveTab} />
+      )}
 
       <NotificationsPanel
         open={notifOpen}

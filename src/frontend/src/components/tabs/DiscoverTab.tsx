@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
@@ -9,8 +9,8 @@ import {
   useMotionValue,
   useTransform,
 } from "motion/react";
-import { useRef, useState } from "react";
-import type { Profile } from "../../backend";
+import { useEffect, useRef, useState } from "react";
+import type { Profile, Story } from "../../backend";
 import { usePrivacy } from "../../contexts/PrivacyContext";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
@@ -19,6 +19,7 @@ import {
   useGetCallerProfile,
   useGetStories,
   useGetTinderQueue,
+  useStarUser,
   useTinderLike,
   useTinderPass,
 } from "../../hooks/useQueries";
@@ -26,6 +27,7 @@ import LiveBroadcastScreen from "../LiveBroadcastScreen";
 import ProfileBadges from "../ProfileBadges";
 import SearchScreen from "../SearchScreen";
 import StoryCreatorSheet from "../StoryCreatorSheet";
+import StoryViewer from "../StoryViewer";
 
 const CONFETTI_PIECES = Array.from({ length: 20 }, (_, i) => ({
   id: `piece-${i}`,
@@ -102,49 +104,6 @@ function StoryRing({ count, size = 56 }: { count: number; size?: number }) {
   );
 }
 
-function StoryRingAvatar({
-  principal,
-  profile,
-  onClick,
-}: {
-  principal: Principal;
-  profile: Profile;
-  onClick?: () => void;
-}) {
-  const { data: stories } = useGetStories(principal);
-  const count = stories?.length ?? 0;
-  if (count === 0) return null;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex flex-col items-center gap-1 shrink-0 active:scale-95 transition-transform"
-    >
-      <div className="relative w-14 h-14">
-        <StoryRing count={count} size={56} />
-        <div className="absolute inset-[3px] rounded-full overflow-hidden">
-          {profile.avatar ? (
-            <img
-              src={profile.avatar.getDirectURL()}
-              alt={profile.displayName}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <Avatar className="w-full h-full">
-              <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm font-bold">
-                {profile.displayName[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          )}
-        </div>
-      </div>
-      <span className="text-white/50 text-[10px] w-14 text-center truncate">
-        {profile.displayName}
-      </span>
-    </button>
-  );
-}
-
 const playLikeSound = () => {
   try {
     const ctx = new (
@@ -162,15 +121,121 @@ const playLikeSound = () => {
   } catch {}
 };
 
+// ── Recommendation scoring ──────────────────────────────────────────────────
+function scoreProfile(
+  profile: Profile,
+  myProfile: Profile | null | undefined,
+  _myPrincipal: Principal | null | undefined,
+  principalStr: string,
+): number {
+  let score = 0;
+  if (!myProfile) return score;
+  // Opposite gender preference: +30
+  const myGender = myProfile.gender?.toLowerCase() ?? "";
+  const theirGender = profile.gender?.toLowerCase() ?? "";
+  if (
+    myGender &&
+    theirGender &&
+    ((myGender === "male" && theirGender === "female") ||
+      (myGender === "female" && theirGender === "male"))
+  ) {
+    score += 30;
+  }
+  // Same city/location: +20
+  const myLoc = myProfile.location?.toLowerCase() ?? "";
+  const theirLoc = profile.location?.toLowerCase() ?? "";
+  if (
+    myLoc &&
+    theirLoc &&
+    (myLoc.includes(theirLoc) || theirLoc.includes(myLoc))
+  ) {
+    score += 20;
+  }
+  // Shared interests count × 5 (max 25): up to +25
+  const myInterests = myProfile.interests
+    ? myProfile.interests.split(",").map((s) => s.trim().toLowerCase())
+    : [];
+  const theirInterests = profile.interests
+    ? profile.interests.split(",").map((s) => s.trim().toLowerCase())
+    : [];
+  const interestOverlap = myInterests.filter((i) => theirInterests.includes(i));
+  score += Math.min(interestOverlap.length * 5, 25);
+  // Qualification/education match: +10
+  if (
+    myProfile.education &&
+    profile.education &&
+    myProfile.education.trim() &&
+    profile.education.trim() &&
+    myProfile.education
+      .toLowerCase()
+      .includes(profile.education.toLowerCase().split(" ")[0])
+  ) {
+    score += 10;
+  }
+  // Has profile views (avatar present as proxy): +5
+  if (profile.avatar) score += 5;
+  // Shared hobbies bonus
+  const myHobbies = myProfile.hobbies
+    ? myProfile.hobbies.split(",").map((s) => s.trim().toLowerCase())
+    : [];
+  const theirHobbies = profile.hobbies
+    ? profile.hobbies.split(",").map((s) => s.trim().toLowerCase())
+    : [];
+  const hobbyOverlap = myHobbies.filter((h) => theirHobbies.includes(h));
+  score += Math.min(hobbyOverlap.length * 3, 10);
+  // Tiebreaker
+  score += (principalStr.charCodeAt(0) % 3) * 0.01;
+  return score;
+}
+
+function getMatchPercent(
+  profile: Profile,
+  myProfile: Profile | null | undefined,
+  principalStr: string,
+): number {
+  const maxScore = 90; // 30+20+25+10+5
+  const raw = scoreProfile(profile, myProfile, null, principalStr);
+  return Math.min(100, Math.round((raw / maxScore) * 100));
+}
+
+const QUICK_REACTIONS = [
+  { emoji: "⭐", label: "Star" },
+  { emoji: "❤️", label: "Heart" },
+  { emoji: "💋", label: "Kiss" },
+  { emoji: "🥺", label: "Miss you" },
+  { emoji: "🙏", label: "Thanks" },
+  { emoji: "🔗", label: "Link" },
+];
+
+const CARD_GRADIENTS = [
+  "linear-gradient(135deg, #3d1a5e, #1a3d5e)",
+  "linear-gradient(135deg, #5e1a3d, #3d1a0a)",
+  "linear-gradient(135deg, #1a3d1a, #1a2e3d)",
+];
+
 interface Props {
   onUserClick: (p: Principal) => void;
   onNotifOpen?: () => void;
+  onStoryOpen?: () => void;
+  onStoryClose?: () => void;
 }
 
-export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
+interface StoryViewState {
+  stories: Story[];
+  principal: Principal;
+  profile: Profile;
+}
+
+export default function DiscoverTab({
+  onUserClick,
+  onNotifOpen,
+  onStoryOpen,
+  onStoryClose,
+}: Props) {
   const [showLive, setShowLive] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
+  const [storyView, setStoryView] = useState<StoryViewState | null>(null);
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal() ?? null;
   const { data: callerProfile } = useGetCallerProfile();
@@ -179,11 +244,42 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
 
   const myStoryCount = myStories?.length ?? 0;
 
-  // Other users with stories (up to 6)
   const otherUsersWithStories =
     allProfiles
       ?.filter(([p]) => p.toString() !== myPrincipal?.toString())
       .slice(0, 6) ?? [];
+
+  const picksScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll Today's Picks
+  useEffect(() => {
+    const el = picksScrollRef.current;
+    if (!el) return;
+    const interval = setInterval(() => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
+      if (el.scrollLeft >= maxScroll - 5) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: 140, behavior: "smooth" });
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const openStory = (
+    stories: Story[],
+    principal: Principal,
+    profile: Profile,
+  ) => {
+    setStoryView({ stories, principal, profile });
+    onStoryOpen?.();
+  };
+
+  const closeStory = () => {
+    setStoryView(null);
+    onStoryClose?.();
+  };
 
   if (showLive) {
     return <LiveBroadcastScreen onBack={() => setShowLive(false)} />;
@@ -204,42 +300,56 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
   return (
     <div
       data-ocid="discover.page"
-      className="flex flex-col h-full bg-[#0a0a0f]"
+      className="flex flex-col h-full"
+      style={{ background: "var(--sf-bg, #0a0a0f)" }}
     >
       {/* Single-row header */}
       <div
-        className="shrink-0 flex items-center justify-between px-4 bg-[#0a0a0f] border-b border-white/5"
-        style={{ height: 56 }}
+        className="shrink-0 flex items-center justify-between px-4"
+        style={{
+          height: 56,
+          background: "rgba(10,10,15,0.97)",
+          borderBottom: "1px solid rgba(255,255,255,0.05)",
+        }}
       >
-        <span className="discover-title text-2xl font-bold tracking-tight select-none">
+        <span
+          className="text-xl font-black tracking-tight"
+          style={{
+            background:
+              "linear-gradient(90deg, #ec4899 0%, #a855f7 50%, #ec4899 100%)",
+            backgroundSize: "200%",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            animation: "gradientMove 3s linear infinite",
+          }}
+        >
           Discover
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             data-ocid="discover.search_input"
             onClick={() => setShowSearch(true)}
-            className="w-9 h-9 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-95 transition-transform"
+            className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform"
           >
             <Search className="w-4 h-4 text-white/70" />
           </button>
           <button
             type="button"
-            data-ocid="discover.primary_button"
+            data-ocid="discover.button"
             onClick={() => setShowLive(true)}
-            className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+            className="flex items-center gap-1 bg-red-600/90 text-white text-xs font-bold px-2.5 py-1 rounded-full"
           >
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             LIVE
           </button>
           <button
             type="button"
             data-ocid="discover.toggle"
             onClick={() => onNotifOpen?.()}
-            className="w-9 h-9 rounded-full bg-pink-500/15 border border-pink-500/20 flex items-center justify-center active:scale-95 transition-transform relative"
+            className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform"
           >
-            <Heart className="w-4 h-4 text-pink-400" />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-pink-500" />
+            <Heart className="w-4 h-4 text-white/70" />
           </button>
         </div>
       </div>
@@ -247,7 +357,6 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
       {/* Story row */}
       <div className="px-4 pt-3 pb-2 shrink-0">
         <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
-          {/* My story / add story button */}
           <div className="flex flex-col items-center gap-1 shrink-0">
             <button
               type="button"
@@ -268,7 +377,7 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
                     ) : (
                       <div className="w-full h-full rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
                         <span className="text-white text-xl font-bold">
-                          {callerProfile?.displayName?.[0]?.toUpperCase() ??
+                          {callerProfile?.displayName?.[0]?.toUpperCase() ||
                             "+"}
                         </span>
                       </div>
@@ -293,13 +402,13 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
             </span>
           </div>
 
-          {/* Other users' stories */}
           {otherUsersWithStories.map(([p, prof]) => (
-            <StoryRingAvatar
+            <StoryRingAvatarWithStories
               key={p.toString()}
               principal={p}
               profile={prof}
-              onClick={() => onUserClick(p)}
+              onOpenStory={(stories) => openStory(stories, p, prof)}
+              onUserClick={() => onUserClick(p)}
             />
           ))}
         </div>
@@ -307,9 +416,11 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
 
       {/* Daily Picks section */}
       {(() => {
+        const { isPrivate } = { isPrivate: (_s: string) => false };
+        void isPrivate;
         const pickProfiles = (allProfiles ?? [])
           .filter(([p]) => p.toString() !== myPrincipal?.toString())
-          .slice(0, 3);
+          .slice(0, 5);
         if (pickProfiles.length === 0) return null;
         return (
           <div className="px-4 pb-3 shrink-0">
@@ -324,10 +435,16 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
             >
               Today&apos;s Picks ✨
             </p>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+            <div
+              ref={picksScrollRef}
+              className="flex gap-3 overflow-x-auto no-scrollbar pb-1"
+            >
               {pickProfiles.map(([principal, prof]) => {
-                const matchScore =
-                  (principal.toString().charCodeAt(2) % 40) + 60;
+                const matchPct = getMatchPercent(
+                  prof,
+                  callerProfile,
+                  principal.toString(),
+                );
                 return (
                   <button
                     key={principal.toString()}
@@ -361,13 +478,11 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
                       className="text-xs font-bold"
                       style={{ color: "#f472b6" }}
                     >
-                      {matchScore}% Match
+                      {matchPct}% Match
                     </p>
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
+                      onClick={(e) => e.stopPropagation()}
                       className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
                       style={{
                         background: "linear-gradient(135deg, #ec4899, #a855f7)",
@@ -383,15 +498,297 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
         );
       })()}
 
-      {/* Swipe section */}
-      <div className="flex-1 overflow-hidden">
-        <TinderSection onUserClick={onUserClick} onLikeSound={playLikeSound} />
+      {/* Swipe section + Quick Reactions */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden">
+          <TinderSection
+            onUserClick={onUserClick}
+            onLikeSound={playLikeSound}
+          />
+        </div>
+
+        {/* Quick Send Reactions */}
+        <QuickReactionRow />
       </div>
 
       <StoryCreatorSheet
         open={storyCreatorOpen}
         onClose={() => setStoryCreatorOpen(false)}
       />
+
+      {/* Story Viewer */}
+      <AnimatePresence>
+        {storyView && (
+          <StoryViewer
+            stories={storyView.stories}
+            author={storyView.principal}
+            profile={storyView.profile}
+            onClose={closeStory}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Story ring avatar that fetches stories and opens viewer on click
+function StoryRingAvatarWithStories({
+  principal,
+  profile,
+  onOpenStory,
+  onUserClick,
+}: {
+  principal: Principal;
+  profile: Profile;
+  onOpenStory: (stories: Story[]) => void;
+  onUserClick: () => void;
+}) {
+  const { data: stories } = useGetStories(principal);
+  const count = stories?.length ?? 0;
+  if (count === 0) return null;
+
+  const handleClick = () => {
+    if (stories && stories.length > 0) {
+      onOpenStory(stories);
+    } else {
+      onUserClick();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="flex flex-col items-center gap-1 shrink-0 active:scale-95 transition-transform"
+    >
+      <div className="relative w-14 h-14">
+        <StoryRing count={count} size={56} />
+        <div className="absolute inset-[3px] rounded-full overflow-hidden">
+          {profile.avatar ? (
+            <img
+              src={profile.avatar.getDirectURL()}
+              alt={profile.displayName}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Avatar className="w-full h-full">
+              <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm font-bold">
+                {profile.displayName[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+      </div>
+      <span className="text-white/50 text-[10px] w-14 text-center truncate">
+        {profile.displayName}
+      </span>
+    </button>
+  );
+}
+
+function QuickReactionRow() {
+  const [sentIdx, setSentIdx] = useState<number | null>(null);
+
+  const handleSend = (idx: number) => {
+    setSentIdx(idx);
+    setTimeout(() => setSentIdx(null), 1500);
+  };
+
+  return (
+    <div className="px-3 pb-3 shrink-0">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+        {QUICK_REACTIONS.map((r, i) => (
+          <button
+            key={r.label}
+            type="button"
+            data-ocid="discover.button"
+            onClick={() => handleSend(i)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-white text-sm font-semibold active:scale-95 transition-all"
+            style={{
+              background:
+                sentIdx === i
+                  ? "linear-gradient(135deg, #10b981, #059669)"
+                  : "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(168,85,247,0.3))",
+              border: "1px solid rgba(236,72,153,0.3)",
+            }}
+          >
+            <span className="text-base">{r.emoji}</span>
+            <span className="text-xs">
+              {sentIdx === i ? "Sent! ✓" : r.label}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Auto-sliding carousel for profile card ───────────────────────────────────
+function ProfileCardCarousel({
+  prof,
+  principalStr,
+}: { prof: Profile; principalStr: string }) {
+  const slides = [
+    { type: "avatar" as const },
+    { type: "info" as const },
+    { type: "interests" as const },
+  ];
+  const [slideIdx, setSlideIdx] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSlideIdx((i) => (i + 1) % slides.length);
+    }, 2500);
+    return () => clearInterval(t);
+  }, [slides.length]);
+
+  const interests =
+    prof.interests
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 4) ?? [];
+
+  return (
+    <div className="relative overflow-hidden" style={{ height: 280 }}>
+      <AnimatePresence mode="wait">
+        {slideIdx === 0 && (
+          <motion.div
+            key="slide-avatar"
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            {prof.avatar ? (
+              <img
+                src={prof.avatar.getDirectURL()}
+                alt={prof.displayName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div
+                className="w-full h-full flex items-center justify-center"
+                style={{
+                  background:
+                    CARD_GRADIENTS[
+                      Number.parseInt(principalStr.slice(-1), 16) %
+                        CARD_GRADIENTS.length
+                    ],
+                }}
+              >
+                <span className="text-7xl font-black text-white/30">
+                  {prof.displayName[0]?.toUpperCase()}
+                </span>
+              </div>
+            )}
+          </motion.div>
+        )}
+        {slideIdx === 1 && (
+          <motion.div
+            key="slide-info"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{
+              background: "linear-gradient(135deg, #1e0a3e 0%, #0a1e3e 100%)",
+            }}
+          >
+            <div
+              className="w-20 h-20 rounded-full overflow-hidden border-4 shadow-lg"
+              style={{ borderColor: "rgba(236,72,153,0.6)" }}
+            >
+              {prof.avatar ? (
+                <img
+                  src={prof.avatar.getDirectURL()}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
+                  <span className="text-white text-2xl font-bold">
+                    {prof.displayName[0]?.toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+            {prof.location && (
+              <p className="text-white/80 text-sm text-center">
+                📍 {prof.location}
+              </p>
+            )}
+            {prof.bio && (
+              <p className="text-white/60 text-sm text-center line-clamp-3">
+                {prof.bio}
+              </p>
+            )}
+          </motion.div>
+        )}
+        {slideIdx === 2 && (
+          <motion.div
+            key="slide-interests"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{
+              background: "linear-gradient(135deg, #0a2e1e 0%, #1e0a2e 100%)",
+            }}
+          >
+            <p className="text-white/60 text-xs uppercase tracking-widest">
+              Interests
+            </p>
+            {interests.length > 0 ? (
+              <div className="flex flex-wrap gap-2 justify-center">
+                {interests.map((interest) => (
+                  <span
+                    key={interest}
+                    className="px-3 py-1.5 rounded-full text-white text-xs font-medium"
+                    style={{
+                      background: "linear-gradient(135deg, #ec4899, #a855f7)",
+                    }}
+                  >
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-4xl">✨</span>
+            )}
+            {prof.thoughts && (
+              <p className="text-white/50 text-xs text-center italic line-clamp-2">
+                💭 {prof.thoughts}
+              </p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Dot indicators */}
+      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
+        {slides.map((slide, i) => (
+          <button
+            key={slide.type}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSlideIdx(i);
+            }}
+            className="transition-all rounded-full"
+            style={{
+              width: i === slideIdx ? 16 : 6,
+              height: 6,
+              background:
+                i === slideIdx
+                  ? "linear-gradient(90deg, #ec4899, #a855f7)"
+                  : "rgba(255,255,255,0.3)",
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -402,6 +799,7 @@ function TinderSection({
 }: { onUserClick: (p: Principal) => void; onLikeSound: () => void }) {
   const { data: queue, isLoading } = useGetTinderQueue();
   const { data: allProfiles } = useGetAllProfiles();
+  const { data: callerProfile } = useGetCallerProfile();
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
   const { blockedSet } = useBlockedUsers();
@@ -412,259 +810,323 @@ function TinderSection({
   const [showMatch, setShowMatch] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [lastMatchName, setLastMatchName] = useState("");
+  const [sentReaction, setSentReaction] = useState<string | null>(null);
 
-  // Use queue profiles if available, otherwise fall back to allProfiles excluding self
-  const profiles =
-    queue && queue.length > 0
-      ? queue.filter((_, i) => {
+  type ProfileEntry = {
+    prof: Profile;
+    principalStr: string;
+    principal: Principal;
+  };
+
+  const profilesWithPrincipal: ProfileEntry[] = (() => {
+    if (queue && queue.length > 0) {
+      return queue
+        .filter((_q, i) => {
           const entry = allProfiles?.[i];
           if (!entry) return true;
           return !isPrivate(entry[0].toString());
         })
-      : (allProfiles
-          ?.filter(
-            ([p]) =>
-              p.toString() !== myPrincipal?.toString() &&
-              !blockedSet.has(p.toString()) &&
-              !isPrivate(p.toString()),
-          )
-          .map(([, prof]) => prof) ?? []);
-  const currentProfile = profiles[currentIndex] ?? null;
+        .map((prof: Profile, i: number) => ({
+          prof,
+          principalStr: allProfiles?.[i]?.[0]?.toString() ?? String(i),
+          principal: (allProfiles?.[i]?.[0] ?? null) as Principal,
+        }));
+    }
+    return (
+      allProfiles
+        ?.filter(
+          ([p]) =>
+            p.toString() !== myPrincipal?.toString() &&
+            !blockedSet.has(p.toString()) &&
+            !isPrivate(p.toString()),
+        )
+        .map(([p, prof]) => ({
+          prof,
+          principalStr: p.toString(),
+          principal: p,
+        })) ?? []
+    );
+  })();
 
-  // Find principal for current profile from allProfiles
-  const currentPrincipal =
-    allProfiles?.find(
-      ([, prof]) => prof.displayName === currentProfile?.displayName,
-    )?.[0] ?? null;
+  const sortedProfiles = [...profilesWithPrincipal].sort(
+    (a, b) =>
+      scoreProfile(b.prof, callerProfile, myPrincipal, b.principalStr) -
+      scoreProfile(a.prof, callerProfile, myPrincipal, a.principalStr),
+  );
+
+  const current = sortedProfiles[currentIndex] ?? null;
 
   const handleLike = async () => {
-    if (!currentProfile) return;
+    if (!current?.principal) return;
     onLikeSound();
     try {
-      if (currentPrincipal) await _tinderLike.mutateAsync(currentPrincipal);
-      setLastMatchName(currentProfile.displayName);
-      setShowMatch(true);
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 1600);
+      await _tinderLike.mutateAsync(current.principal);
+    } catch {}
+    setShowMatch(true);
+    setShowConfetti(true);
+    setLastMatchName(current.prof.displayName);
+    setTimeout(() => {
+      setShowMatch(false);
+      setShowConfetti(false);
+      setCurrentIndex((i) => i + 1);
+    }, 2000);
+  };
+
+  const handlePass = async () => {
+    if (!current?.principal) return;
+    try {
+      await _tinderPass.mutateAsync(current.principal);
     } catch {}
     setCurrentIndex((i) => i + 1);
   };
 
-  const handlePass = async () => {
-    if (!currentProfile) return;
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-150, 150], [-18, 18]);
+  const likeOpacity = useTransform(x, [20, 100], [0, 1]);
+  const passOpacity = useTransform(x, [-100, -20], [1, 0]);
+
+  const handleDragEnd = (_: any, info: { offset: { x: number } }) => {
+    if (info.offset.x > 100) {
+      handleLike();
+    } else if (info.offset.x < -100) {
+      handlePass();
+    } else {
+      x.set(0);
+    }
+  };
+
+  const useStarUserMutation = useStarUser();
+
+  const handleStar = async () => {
+    if (!current?.principal) return;
     try {
-      if (currentPrincipal) await _tinderPass.mutateAsync(currentPrincipal);
+      await useStarUserMutation.mutateAsync(current.principal);
     } catch {}
-    setCurrentIndex((i) => i + 1);
+  };
+
+  const handleCardReaction = (emoji: string) => {
+    setSentReaction(emoji);
+    setTimeout(() => setSentReaction(null), 1500);
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div
-          data-ocid="discover.loading_state"
-          className="w-full max-w-xs mx-4"
-        >
-          <Skeleton className="w-full aspect-[3/4] rounded-3xl" />
+        <div className="flex flex-col items-center gap-3">
+          <Skeleton className="w-64 h-80 rounded-3xl" />
         </div>
       </div>
     );
   }
 
-  if (!currentProfile) {
+  if (!current) {
     return (
-      <div
-        data-ocid="discover.empty_state"
-        className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center"
-      >
-        <div className="text-6xl">🌟</div>
-        <p className="text-white/70 font-bold text-xl">
-          You&apos;re all caught up!
-        </p>
-        <p className="text-white/40 text-sm">Check back later for new people</p>
+      <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{
+            background: "linear-gradient(135deg, #ec4899, #a855f7)",
+          }}
+        >
+          <Heart className="w-10 h-10 text-white" />
+        </div>
+        <div className="text-center">
+          <p className="text-white font-bold text-lg">
+            You&apos;re all caught up!
+          </p>
+          <p className="text-white/40 text-sm mt-1">
+            Check back soon for new profiles
+          </p>
+        </div>
+        <Button
+          onClick={() => setCurrentIndex(0)}
+          className="rounded-full px-6"
+          style={{ background: "linear-gradient(135deg, #ec4899, #a855f7)" }}
+        >
+          Restart
+        </Button>
       </div>
     );
   }
 
+  const { prof, principalStr } = current;
+  const matchPct = getMatchPercent(prof, callerProfile, principalStr);
+
   return (
-    <div className="relative flex flex-col items-center h-full px-4 pb-4">
+    <div className="relative flex flex-col items-center justify-center h-full gap-3 px-4">
+      {/* Confetti */}
+      <AnimatePresence>
+        {showConfetti && (
+          <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center">
+            {CONFETTI_PIECES.map(({ id, color, index }) => (
+              <ConfettiPiece key={id} color={color} index={index} />
+            ))}
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Match banner */}
       <AnimatePresence>
         {showMatch && (
           <motion.div
-            key="match-banner"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 rounded-3xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.8, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: -20 }}
+            className="absolute top-4 left-0 right-0 flex justify-center z-30"
           >
-            {showConfetti &&
-              CONFETTI_PIECES.map((piece) => (
-                <ConfettiPiece
-                  key={piece.id}
-                  color={piece.color}
-                  index={piece.index}
-                />
-              ))}
-            <div className="flex flex-col items-center gap-4 p-6 relative z-10">
-              <p className="text-5xl">💕</p>
-              <p className="text-white font-bold text-2xl">
-                It&apos;s a Match!
-              </p>
-              <p className="text-white/60">
-                You and {lastMatchName} liked each other
-              </p>
-              <Button
-                onClick={() => setShowMatch(false)}
-                className="bg-gradient-to-r from-pink-500 to-purple-600 border-0 text-white"
-              >
-                Keep Swiping
-              </Button>
+            <div
+              className="px-6 py-3 rounded-2xl text-white font-bold text-lg shadow-2xl"
+              style={{
+                background: "linear-gradient(135deg, #ec4899, #a855f7)",
+              }}
+            >
+              ❤️ You liked {lastMatchName}!
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <SwipeCard
-        profile={currentProfile}
-        onLike={handleLike}
-        onPass={handlePass}
-        onTap={() => currentPrincipal && onUserClick(currentPrincipal)}
-      />
-    </div>
-  );
-}
+      {/* Reaction sent animation */}
+      <AnimatePresence>
+        {sentReaction && (
+          <motion.div
+            key={sentReaction}
+            className="absolute top-1/3 left-0 right-0 flex justify-center z-30 pointer-events-none"
+            initial={{ opacity: 1, scale: 0.5, y: 0 }}
+            animate={{ opacity: 0, scale: 2, y: -60 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8 }}
+          >
+            <span className="text-4xl">{sentReaction}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-function SwipeCard({
-  profile,
-  onLike,
-  onPass,
-  onTap,
-}: {
-  profile: Profile;
-  onLike: () => void;
-  onPass: () => void;
-  onTap: () => void;
-}) {
-  const x = useMotionValue(0);
-  const rotate = useTransform(x, [-150, 150], [-18, 18]);
-  const opacity = useTransform(x, [-150, -80, 0, 80, 150], [0, 1, 1, 1, 0]);
-  const likeOpacity = useTransform(x, [20, 80], [0, 1]);
-  const nopeOpacity = useTransform(x, [-80, -20], [1, 0]);
-  const isDragging = useRef(false);
-
-  const handleDragStart = () => {
-    isDragging.current = true;
-  };
-  const handleDragEnd = (_: unknown, info: { offset: { x: number } }) => {
-    setTimeout(() => {
-      isDragging.current = false;
-    }, 50);
-    if (info.offset.x > 100) onLike();
-    else if (info.offset.x < -100) onPass();
-  };
-
-  const handleCardTap = () => {
-    if (!isDragging.current) onTap();
-  };
-
-  const handleSuperlike = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onLike();
-  };
-
-  const handlePassClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onPass();
-  };
-
-  const handleLikeClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onLike();
-  };
-
-  return (
-    <div className="relative w-full flex flex-col items-center flex-1">
+      {/* Card */}
       <motion.div
+        key={principalStr}
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
-        style={{ x, rotate, opacity }}
-        onDragStart={handleDragStart}
+        style={{ x, rotate }}
         onDragEnd={handleDragEnd}
-        onClick={handleCardTap}
-        className="w-full cursor-grab active:cursor-grabbing"
-        data-ocid="discover.card"
+        onClick={() => onUserClick(current.principal)}
+        className="relative w-full max-w-xs cursor-pointer"
+        whileTap={{ scale: 0.98 }}
       >
-        <div className="relative w-full aspect-[3/4] rounded-3xl overflow-hidden bg-gradient-to-br from-pink-900/40 to-purple-900/40 shadow-2xl">
-          {profile.avatar ? (
-            <img
-              src={profile.avatar.getDirectURL()}
-              alt={profile.displayName}
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-8xl">👤</span>
+        {/* Like/Pass overlays */}
+        <motion.div
+          style={{ opacity: likeOpacity }}
+          className="absolute top-8 left-4 z-10 px-3 py-1 bg-green-500/90 text-white font-black text-2xl rounded-xl border-4 border-green-400 rotate-[-12deg] pointer-events-none"
+        >
+          LIKE
+        </motion.div>
+        <motion.div
+          style={{ opacity: passOpacity }}
+          className="absolute top-8 right-4 z-10 px-3 py-1 bg-red-500/90 text-white font-black text-2xl rounded-xl border-4 border-red-400 rotate-[12deg] pointer-events-none"
+        >
+          PASS
+        </motion.div>
+
+        <div
+          className="rounded-3xl overflow-hidden shadow-2xl"
+          style={{
+            background: "linear-gradient(135deg, #1a0a2e, #0a1a2e)",
+            boxShadow:
+              "0 20px 60px rgba(236,72,153,0.2), 0 0 0 1px rgba(255,255,255,0.05)",
+          }}
+        >
+          {/* Auto-sliding carousel */}
+          <ProfileCardCarousel prof={prof} principalStr={principalStr} />
+
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-0.5">
+              <h3 className="text-white font-bold text-lg">
+                {prof.displayName}
+              </h3>
+              <div className="flex items-center gap-1.5">
+                {matchPct > 0 && (
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      background: "linear-gradient(90deg, #ec4899, #a855f7)",
+                      color: "white",
+                    }}
+                  >
+                    {matchPct}% Match
+                  </span>
+                )}
+                <ProfileBadges principalStr={current.principalStr} />
+              </div>
             </div>
-          )}
-
-          <motion.div
-            style={{ opacity: likeOpacity }}
-            className="absolute top-8 left-6 rotate-[-15deg] border-4 border-green-400 rounded-lg px-3 py-1"
-          >
-            <span className="text-green-400 font-black text-2xl">LIKE</span>
-          </motion.div>
-          <motion.div
-            style={{ opacity: nopeOpacity }}
-            className="absolute top-8 right-6 rotate-[15deg] border-4 border-red-400 rounded-lg px-3 py-1"
-          >
-            <span className="text-red-400 font-black text-2xl">NOPE</span>
-          </motion.div>
-
-          <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm rounded-full px-2 py-1">
-            <span className="text-white/60 text-[10px]">Tap for profile</span>
+            {prof.location && (
+              <p className="text-white/40 text-xs">📍 {prof.location}</p>
+            )}
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4">
-            <h3 className="text-white font-bold text-xl">
-              {profile.displayName}
-            </h3>
-            {profile.location && (
-              <p className="text-white/60 text-sm">📍 {profile.location}</p>
-            )}
-            {profile.bio && (
-              <p className="text-white/70 text-sm mt-1 line-clamp-2">
-                {profile.bio}
-              </p>
-            )}
+          {/* Per-card quick reactions */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: stop propagation wrapper */}
+          <div
+            className="px-3 pb-3 flex gap-1.5 overflow-x-auto no-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {QUICK_REACTIONS.map((r) => (
+              <button
+                key={r.label}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCardReaction(r.emoji);
+                }}
+                className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-white text-xs active:scale-90 transition-transform"
+                style={{
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
+                <span>{r.emoji}</span>
+                <span className="text-[10px] opacity-70">{r.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </motion.div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-5 mt-4">
+      <div className="flex items-center gap-4">
         <button
           type="button"
           data-ocid="discover.delete_button"
-          onClick={handlePassClick}
-          className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePass();
+          }}
+          className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center active:scale-90 transition-transform"
         >
-          <X className="w-6 h-6 text-white" />
-        </button>
-        <button
-          type="button"
-          data-ocid="discover.secondary_button"
-          onClick={handleSuperlike}
-          className="w-14 h-14 rounded-full bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center shadow-lg shadow-yellow-400/30 active:scale-95 transition-transform"
-        >
-          <Star className="w-6 h-6 text-white fill-white" />
+          <X className="w-6 h-6 text-white/60" />
         </button>
         <button
           type="button"
           data-ocid="discover.toggle"
-          onClick={handleLikeClick}
-          className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30 active:scale-95 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStar();
+          }}
+          className="w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+          style={{ background: "linear-gradient(135deg, #fbbf24, #f59e0b)" }}
         >
-          <Heart className="w-7 h-7 text-white" />
+          <Star className="w-5 h-5 text-white fill-white" />
+        </button>
+        <button
+          type="button"
+          data-ocid="discover.primary_button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleLike();
+          }}
+          className="w-14 h-14 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+          style={{ background: "linear-gradient(135deg, #ec4899, #a855f7)" }}
+        >
+          <Heart className="w-6 h-6 text-white fill-white" />
         </button>
       </div>
     </div>

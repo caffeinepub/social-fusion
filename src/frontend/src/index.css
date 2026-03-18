@@ -26,6 +26,17 @@
     --input: 240 5% 14%;
     --ring: 317 80% 62%;
     --radius: 0.75rem;
+
+    /* Social Fusion theme tokens */
+    --sf-bg: #0a0a0f;
+    --sf-bg-card: #13131f;
+    --sf-bg-secondary: #1a1a2e;
+    --sf-text-primary: #f1f0f5;
+    --sf-text-secondary: rgba(241, 240, 245, 0.5);
+    --sf-border: rgba(255, 255, 255, 0.08);
+    --app-bg: #0a0a0f;
+    --accent-primary: #ec4899;
+    --accent-secondary: #a855f7;
   }
 }
 
@@ -59,6 +70,15 @@
   border-radius: 2px;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Mobile app feel */
 .app-container {
   max-width: 430px;
@@ -66,7 +86,7 @@
   min-height: 100dvh;
   position: relative;
   overflow: hidden;
-  background: hsl(var(--background));
+  background: var(--sf-bg, hsl(var(--background)));
 }
 
 @media (min-width: 430px) {
@@ -155,6 +175,35 @@
   animation: discover-shimmer 3s ease infinite;
 }
 
+/* Thoughts ticker marquee */
+@keyframes sf-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+.sf-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: sf-marquee 18s linear infinite;
+}
+.sf-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Floating hobby bubble keyframe */
+@keyframes sf-float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
 /* App customization CSS variables */
 :root {
   --app-bg: #0a0a0f;
@@ -173,4 +222,13 @@
   font-weight: 700;
   background: linear-gradient(to right, #eab308, #f59e0b, #d97706);
   color: white;
+}
+
+/* Light theme overrides for hardcoded dark backgrounds */
+[data-sf-theme="light"] .sf-dark-card {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+[data-sf-theme="light"] .sf-dark-text {
+  color: #1a1030 !important;
 }

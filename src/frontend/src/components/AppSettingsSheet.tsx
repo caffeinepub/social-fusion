@@ -13,6 +13,7 @@ import {
   Palette,
   Settings2,
   ShieldOff,
+  Sparkles,
   Trash2,
   Type,
   User,
@@ -417,6 +418,163 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                           {s.charAt(0).toUpperCase() + s.slice(1)}
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Profile Layout Styles */}
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-yellow-400" />
+                        <h3 className="text-white/80 text-sm font-semibold">
+                          Profile Layout Style
+                        </h3>
+                      </div>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full text-yellow-300 font-semibold"
+                        style={{ background: "rgba(245,158,11,0.2)" }}
+                      >
+                        Premium
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        {
+                          id: "classic",
+                          label: "Classic",
+                          icon: "🎭",
+                          desc: "Clean & elegant",
+                        },
+                        {
+                          id: "editorial",
+                          label: "Editorial",
+                          icon: "📰",
+                          desc: "Bold & typographic",
+                        },
+                        {
+                          id: "luxury",
+                          label: "Luxury",
+                          icon: "👑",
+                          desc: "Gold & premium",
+                        },
+                        {
+                          id: "minimal",
+                          label: "Minimal",
+                          icon: "⬜",
+                          desc: "Pure simplicity",
+                        },
+                        {
+                          id: "vibrant",
+                          label: "Vibrant",
+                          icon: "🌈",
+                          desc: "Colorful & expressive",
+                        },
+                        {
+                          id: "neon",
+                          label: "Neon",
+                          icon: "⚡",
+                          desc: "Electric glow",
+                        },
+                        {
+                          id: "retro",
+                          label: "Retro",
+                          icon: "📺",
+                          desc: "Vintage vibes",
+                        },
+                        {
+                          id: "nature",
+                          label: "Nature",
+                          icon: "🌿",
+                          desc: "Earthy & organic",
+                        },
+                        {
+                          id: "cosmic",
+                          label: "Cosmic",
+                          icon: "🌌",
+                          desc: "Space & stars",
+                        },
+                        {
+                          id: "glassmorphic",
+                          label: "Glass",
+                          icon: "💎",
+                          desc: "Frosted glass",
+                        },
+                        {
+                          id: "brutalist",
+                          label: "Brutalist",
+                          icon: "🧱",
+                          desc: "Bold & raw",
+                        },
+                        {
+                          id: "watercolor",
+                          label: "Watercolor",
+                          icon: "🎨",
+                          desc: "Soft & artistic",
+                        },
+                      ].map((style) => {
+                        const isPremiumUser = (() => {
+                          try {
+                            const d = JSON.parse(
+                              localStorage.getItem("socialFusionPremium") ||
+                                "null",
+                            );
+                            return d?.isPremium && d.expiry > Date.now();
+                          } catch {
+                            return false;
+                          }
+                        })();
+                        const isLocked =
+                          !isPremiumUser &&
+                          [
+                            "editorial",
+                            "luxury",
+                            "vibrant",
+                            "neon",
+                            "retro",
+                            "nature",
+                            "cosmic",
+                            "glassmorphic",
+                            "brutalist",
+                            "watercolor",
+                          ].includes(style.id);
+                        return (
+                          <button
+                            key={style.id}
+                            type="button"
+                            data-ocid="settings.toggle"
+                            onClick={() => {
+                              if (isLocked) return;
+                              saveSetting("sf_profile_style", style.id);
+                            }}
+                            className="flex items-center gap-2 p-3 rounded-xl border transition-all relative overflow-hidden"
+                            style={{
+                              borderColor: isLocked
+                                ? "rgba(255,255,255,0.08)"
+                                : "rgba(236,72,153,0.3)",
+                              background: isLocked
+                                ? "rgba(255,255,255,0.03)"
+                                : "rgba(236,72,153,0.08)",
+                            }}
+                          >
+                            <span className="text-lg shrink-0">
+                              {style.icon}
+                            </span>
+                            <div className="flex flex-col items-start">
+                              <span className="text-white/80 text-xs font-semibold">
+                                {style.label}
+                              </span>
+                              <span className="text-white/30 text-[10px]">
+                                {style.desc}
+                              </span>
+                            </div>
+                            {isLocked && (
+                              <span className="absolute top-1 right-1 text-[8px] text-yellow-400 font-bold">
+                                PRO
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

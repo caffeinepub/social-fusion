@@ -39,6 +39,7 @@ import {
   Share2,
   Shield,
   Sparkles,
+  Trash2,
   Video,
   X,
 } from "lucide-react";
@@ -89,12 +90,36 @@ export default function ProfileTab() {
   const qc = useQueryClient();
   const myPrincipal = identity?.getPrincipal() ?? null;
 
-  const { data: profile, isLoading: profileLoading } = useGetCallerProfile();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    refetch: refetchProfile,
+  } = useGetCallerProfile();
+
+  // Force fresh fetch on every mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only
+  useEffect(() => {
+    refetchProfile();
+  }, []);
   const { data: posts } = useGetPostsByUser(myPrincipal);
   const { data: followers } = useGetFollowers(myPrincipal);
   const { data: following } = useGetFollowing(myPrincipal);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
+  const [premiumTrial, setPremiumTrial] = useState<{
+    isPremium: boolean;
+    plan: string;
+    expiry: number;
+  } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("socialFusionPremium");
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.expiry > Date.now()) setPremiumTrial(data);
+      }
+    } catch {}
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const [followSheet, setFollowSheet] = useState<
@@ -103,6 +128,7 @@ export default function ProfileTab() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [profileStrength, setProfileStrength] = useState(0);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [deletedPostIds, setDeletedPostIds] = useState<Set<string>>(new Set());
 
   // Privacy toggles
   const [isPublic, setIsPublic] = useState(true);
@@ -321,6 +347,43 @@ export default function ProfileTab() {
           ))}
         </div>
 
+        {/* Premium Trial Status Card */}
+        {premiumTrial?.isPremium ? (
+          <div
+            className="w-full mt-3 rounded-2xl px-4 py-3 flex items-center gap-3"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(120,53,15,0.8), rgba(217,119,6,0.6))",
+              border: "1px solid rgba(217,119,6,0.4)",
+            }}
+          >
+            <div className="w-9 h-9 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
+              <Crown className="w-5 h-5 text-yellow-300" />
+            </div>
+            <div className="flex-1">
+              <p className="text-yellow-100 font-bold text-sm">
+                {premiumTrial.plan === "trial"
+                  ? "✨ Premium Trial Active"
+                  : "✨ Premium Member"}
+              </p>
+              <p className="text-yellow-200/70 text-[11px]">
+                {Math.max(
+                  0,
+                  Math.ceil(
+                    (premiumTrial.expiry - Date.now()) / (24 * 60 * 60 * 1000),
+                  ),
+                )}{" "}
+                days remaining
+              </p>
+            </div>
+            <span className="text-yellow-400 text-xs font-bold bg-yellow-500/20 px-2 py-1 rounded-full">
+              {premiumTrial.plan === "trial"
+                ? "TRIAL"
+                : premiumTrial.plan.toUpperCase()}
+            </span>
+          </div>
+        ) : null}
+
         {/* Go Premium banner */}
         <motion.button
           type="button"
@@ -524,32 +587,48 @@ export default function ProfileTab() {
           </TabsList>
 
           <TabsContent value="posts" className="mt-0">
-            {posts && posts.length > 0 ? (
+            {posts &&
+            posts.filter((p) => !deletedPostIds.has(p.id.toString())).length >
+              0 ? (
               <div className="grid grid-cols-3 gap-0.5">
-                {posts.map((post, i) => (
-                  <button
-                    key={post.id.toString()}
-                    type="button"
-                    data-ocid={`profile.item.${i + 1}`}
-                    onClick={() => setLightboxIdx(i)}
-                    className="aspect-square bg-muted overflow-hidden"
-                  >
-                    {post.image ? (
-                      <img
-                        src={post.image.getDirectURL()}
-                        alt="Post"
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-pink-900/30 to-purple-900/30 flex items-center justify-center p-2">
-                        <p className="text-xs text-center line-clamp-3 text-white/60">
-                          {post.content}
-                        </p>
-                      </div>
-                    )}
-                  </button>
-                ))}
+                {posts
+                  .filter((p) => !deletedPostIds.has(p.id.toString()))
+                  .map((post, i) => {
+                    const isSelected = lightboxIdx === i;
+                    return (
+                      <button
+                        key={post.id.toString()}
+                        type="button"
+                        data-ocid={`profile.item.${i + 1}`}
+                        onClick={() => setLightboxIdx(i)}
+                        className="aspect-square bg-muted overflow-hidden relative"
+                        style={
+                          isSelected
+                            ? {
+                                outline: "3px solid white",
+                                outlineOffset: "-3px",
+                                borderRadius: 12,
+                              }
+                            : {}
+                        }
+                      >
+                        {post.image ? (
+                          <img
+                            src={post.image.getDirectURL()}
+                            alt="Post"
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-pink-900/30 to-purple-900/30 flex items-center justify-center p-2">
+                            <p className="text-xs text-center line-clamp-3 text-white/60">
+                              {post.content}
+                            </p>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             ) : (
               <div
@@ -564,17 +643,32 @@ export default function ProfileTab() {
 
           <TabsContent value="reels" className="mt-0">
             <div className="grid grid-cols-3 gap-0.5">
-              {REEL_PLACEHOLDERS.map((reel, i) => (
-                <div
-                  key={reel.id}
-                  data-ocid={`profile.item.${i + 1}`}
-                  className={`aspect-square bg-gradient-to-br ${reel.gradient} overflow-hidden relative flex items-center justify-center`}
-                >
-                  <div className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-                    <Play className="w-4 h-4 text-white fill-white ml-0.5" />
-                  </div>
-                </div>
-              ))}
+              {REEL_PLACEHOLDERS.map((reel, i) => {
+                const isSelected = lightboxIdx === i + 1000;
+                return (
+                  <button
+                    key={reel.id}
+                    type="button"
+                    data-ocid={`profile.item.${i + 1}`}
+                    onClick={() => setLightboxIdx(isSelected ? null : i + 1000)}
+                    className={`aspect-square bg-gradient-to-br ${reel.gradient} overflow-hidden relative flex items-center justify-center`}
+                    style={
+                      isSelected
+                        ? {
+                            outline: "4px solid rgba(255,255,255,0.6)",
+                            outlineOffset: "-4px",
+                            boxShadow: "inset 0 0 0 2px white",
+                            borderRadius: 12,
+                          }
+                        : {}
+                    }
+                  >
+                    <div className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+                      <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </TabsContent>
         </Tabs>
@@ -582,20 +676,40 @@ export default function ProfileTab() {
 
       {/* Lightbox */}
       <AnimatePresence>
-        {lightboxIdx !== null && posts && (
+        {lightboxIdx !== null && posts && lightboxIdx < posts.length && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+            className="fixed inset-0 z-50 bg-black flex flex-col"
           >
-            <button
-              type="button"
-              onClick={() => setLightboxIdx(null)}
-              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
+            <div className="flex items-center justify-between px-4 py-3 absolute top-0 left-0 right-0 z-10">
+              <button
+                type="button"
+                onClick={() => setLightboxIdx(null)}
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+              {myPrincipal &&
+                posts[lightboxIdx]?.author.toString() ===
+                  myPrincipal.toString() && (
+                  <button
+                    type="button"
+                    data-ocid="profile.delete_button"
+                    onClick={() => {
+                      const postId = posts[lightboxIdx]?.id.toString();
+                      if (postId) {
+                        setDeletedPostIds((prev) => new Set([...prev, postId]));
+                      }
+                      setLightboxIdx(null);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/20 text-red-400 text-sm"
+                  >
+                    <Trash2 className="w-4 h-4" /> Delete
+                  </button>
+                )}
+            </div>
             {lightboxIdx > 0 && (
               <button
                 type="button"
@@ -605,7 +719,9 @@ export default function ProfileTab() {
                 <ChevronLeft className="w-5 h-5 text-white" />
               </button>
             )}
-            {lightboxIdx < posts.length - 1 && (
+            {lightboxIdx <
+              posts.filter((p) => !deletedPostIds.has(p.id.toString())).length -
+                1 && (
               <button
                 type="button"
                 onClick={() =>
@@ -618,18 +734,28 @@ export default function ProfileTab() {
                 <ChevronRight className="w-5 h-5 text-white" />
               </button>
             )}
-            {posts[lightboxIdx]?.image && (
-              <img
-                src={posts[lightboxIdx].image!.getDirectURL()}
-                alt="Post"
-                className="max-w-full max-h-full object-contain"
-              />
-            )}
-            {!posts[lightboxIdx]?.image && (
-              <p className="text-white text-center px-8">
-                {posts[lightboxIdx]?.content}
-              </p>
-            )}
+            <div className="flex-1 flex items-center justify-center">
+              {posts[lightboxIdx]?.image && (
+                <img
+                  src={posts[lightboxIdx].image!.getDirectURL()}
+                  alt="Post"
+                  className="max-w-full max-h-full object-contain"
+                />
+              )}
+              {!posts[lightboxIdx]?.image && (
+                <p className="text-white text-center px-8">
+                  {posts[lightboxIdx]?.content}
+                </p>
+              )}
+            </div>
+            {/* Post details */}
+            <div className="absolute bottom-0 left-0 right-0 px-4 py-4 bg-gradient-to-t from-black/80 to-transparent">
+              {posts[lightboxIdx]?.content && (
+                <p className="text-white text-sm mb-2">
+                  {posts[lightboxIdx].content.split("|||")[0]}
+                </p>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -690,7 +816,29 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
     thoughts: profile?.thoughts || "",
   });
 
-  // Sync form fields whenever the dialog opens or profile data arrives
+  // Sync form fields whenever profile data arrives or dialog opens
+  useEffect(() => {
+    if (!profile) return;
+    setForm({
+      displayName: profile.displayName || "",
+      bio: profile.bio || "",
+      location: profile.location || "",
+      website: profile.website || "",
+      birthday: profile.birthday || "",
+      gender: profile.gender || "",
+      relationshipStatus: profile.relationshipStatus || "",
+    });
+    setExtForm({
+      interests: profile.interests || "",
+      hobbies: profile.hobbies || "",
+      favMovies: profile.favMovies || "",
+      favSongs: profile.favSongs || "",
+      education: profile.education || "",
+      thoughts: profile.thoughts || "",
+    });
+  }, [profile]);
+
+  // Also re-sync when dialog opens (in case profile already loaded)
   useEffect(() => {
     if (open && profile) {
       setForm({
@@ -1077,20 +1225,118 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
 }
 
 // ─── Extended Profile Info (reads from backend profile) ─────────────────────
+// -- Animated Thoughts Ticker
+function AnimatedThoughtsTicker({ thoughts }: { thoughts: string }) {
+  if (!thoughts.trim()) return null;
+  const repeated = `${thoughts}   •   ${thoughts}   •   `;
+  return (
+    <div
+      className="mt-2 rounded-xl overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(135deg, rgba(168,85,247,0.12), rgba(236,72,153,0.12))",
+        border: "1px solid rgba(168,85,247,0.2)",
+      }}
+    >
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="text-sm shrink-0">💭</span>
+        <div className="flex-1 overflow-hidden">
+          <div className="sf-marquee-track">
+            <span className="text-xs text-purple-300/90 whitespace-nowrap pr-8">
+              {repeated}
+            </span>
+            <span className="text-xs text-purple-300/90 whitespace-nowrap pr-8">
+              {repeated}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -- Floating Hobby Bubbles
+function FloatingHobbyBubbles({ hobbies }: { hobbies: string }) {
+  const items = hobbies
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  if (items.length === 0) return null;
+  const colors: [string, string][] = [
+    ["#10b981", "#06b6d4"],
+    ["#ec4899", "#a855f7"],
+    ["#f59e0b", "#ef4444"],
+    ["#6366f1", "#8b5cf6"],
+    ["#14b8a6", "#06b6d4"],
+    ["#f97316", "#ec4899"],
+    ["#84cc16", "#22c55e"],
+    ["#a855f7", "#ec4899"],
+  ];
+  return (
+    <div>
+      <p className="text-white/40 text-xs mb-2">🎨 Hobbies</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, i) => (
+          <motion.span
+            key={item}
+            className="px-3 py-1.5 rounded-full text-xs font-medium text-white shadow-sm cursor-default"
+            style={{
+              background: `linear-gradient(135deg, ${colors[i % colors.length][0]}, ${colors[i % colors.length][1]})`,
+            }}
+            animate={{ y: [0, -4, 0] }}
+            transition={{
+              duration: 2.5 + ((i * 0.3) % 1.5),
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+              delay: (i * 0.4) % 2,
+            }}
+          >
+            {item}
+          </motion.span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ExtendedProfileInfo({ profile }: { profile: Profile | null }) {
+  const hasHobbies = !!profile?.hobbies?.trim();
+  const hasThoughts = !!profile?.thoughts?.trim();
+
   const items = [
-    { icon: "🎯", label: "Interests", value: profile?.interests || "" },
-    { icon: "🎮", label: "Hobbies", value: profile?.hobbies || "" },
-    { icon: "🎬", label: "Favourite Movies", value: profile?.favMovies || "" },
-    { icon: "🎵", label: "Favourite Songs", value: profile?.favSongs || "" },
-    { icon: "🎓", label: "Education", value: profile?.education || "" },
-    { icon: "💭", label: "Thoughts", value: profile?.thoughts || "" },
+    {
+      icon: "🎯",
+      label: "Interests",
+      value: profile?.interests || "",
+      gradient: "from-pink-500 to-purple-600",
+    },
+    {
+      icon: "🎬",
+      label: "Favourite Movies",
+      value: profile?.favMovies || "",
+      gradient: "from-orange-500 to-red-600",
+    },
+    {
+      icon: "🎵",
+      label: "Favourite Songs",
+      value: profile?.favSongs || "",
+      gradient: "from-yellow-500 to-orange-500",
+    },
+    {
+      icon: "🎓",
+      label: "Education",
+      value: profile?.education || "",
+      gradient: "from-blue-500 to-cyan-500",
+    },
   ].filter((item) => item.value.trim().length > 0);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && !hasHobbies && !hasThoughts) return null;
 
   return (
-    <div className="mt-3 flex flex-col gap-2">
+    <div className="mt-3 flex flex-col gap-3">
+      {hasThoughts && <AnimatedThoughtsTicker thoughts={profile!.thoughts} />}
+      {hasHobbies && <FloatingHobbyBubbles hobbies={profile!.hobbies} />}
       {items.map((item) => (
         <div
           key={item.label}
@@ -1109,10 +1355,7 @@ function ExtendedProfileInfo({ profile }: { profile: Profile | null }) {
                 .map((token) => (
                   <span
                     key={token}
-                    className="px-2.5 py-1 rounded-full text-xs font-medium text-white"
-                    style={{
-                      background: "linear-gradient(135deg, #ec4899, #a855f7)",
-                    }}
+                    className={`bg-gradient-to-r ${item.gradient} px-2.5 py-1 rounded-full text-xs font-medium text-white`}
                   >
                     {token}
                   </span>

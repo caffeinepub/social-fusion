@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { FileImage, ImagePlus, Loader2, X } from "lucide-react";
+import { FileImage, ImagePlus, Loader2, MapPin, X } from "lucide-react";
 import { useState } from "react";
 import { ExternalBlob } from "../../backend";
 import { useCreatePost, useCreateStory } from "../../hooks/useQueries";
@@ -13,9 +14,14 @@ interface Props {
 
 export default function CreateTab({ onSuccess }: Props) {
   const [postContent, setPostContent] = useState("");
+  const [postTags, setPostTags] = useState("");
+  const [postLocation, setPostLocation] = useState("");
   const [storyContent, setStoryContent] = useState("");
-  const [postImage, setPostImage] = useState<ExternalBlob | null>(null);
-  const [postImagePreview, setPostImagePreview] = useState("");
+  const [postMedia, setPostMedia] = useState<ExternalBlob | null>(null);
+  const [postMediaPreview, setPostMediaPreview] = useState("");
+  const [postMediaType, setPostMediaType] = useState<"image" | "video">(
+    "image",
+  );
   const [storyImage, setStoryImage] = useState<ExternalBlob | null>(null);
   const [storyImagePreview, setStoryImagePreview] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -23,7 +29,7 @@ export default function CreateTab({ onSuccess }: Props) {
   const createPost = useCreatePost();
   const createStory = useCreateStory();
 
-  const handleImageSelect = async (
+  const handleMediaSelect = async (
     e: React.ChangeEvent<HTMLInputElement>,
     type: "post" | "story",
   ) => {
@@ -35,18 +41,20 @@ export default function CreateTab({ onSuccess }: Props) {
     );
     const preview = URL.createObjectURL(new Blob([bytes]));
     if (type === "post") {
-      setPostImage(blob);
-      setPostImagePreview(preview);
+      setPostMedia(blob);
+      setPostMediaPreview(preview);
+      setPostMediaType(file.type.startsWith("video/") ? "video" : "image");
     } else {
       setStoryImage(blob);
       setStoryImagePreview(preview);
     }
   };
 
-  const clearImage = (type: "post" | "story") => {
+  const clearMedia = (type: "post" | "story") => {
     if (type === "post") {
-      setPostImage(null);
-      setPostImagePreview("");
+      setPostMedia(null);
+      setPostMediaPreview("");
+      setPostMediaType("image");
     } else {
       setStoryImage(null);
       setStoryImagePreview("");
@@ -56,17 +64,27 @@ export default function CreateTab({ onSuccess }: Props) {
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!postContent.trim() && !postImage) {
+    if (!postContent.trim() && !postMedia) {
       return;
     }
+    // Build content with tags and location appended for display
+    const fullContent = [
+      postContent.trim(),
+      postTags.trim() ? `tags:${postTags.trim()}` : "",
+      postLocation.trim() ? `loc:${postLocation.trim()}` : "",
+    ]
+      .filter(Boolean)
+      .join("|||");
     try {
       await createPost.mutateAsync({
-        content: postContent.trim(),
-        image: postImage,
+        content: fullContent,
+        image: postMedia,
       });
       setPostContent("");
-      setPostImage(null);
-      setPostImagePreview("");
+      setPostTags("");
+      setPostLocation("");
+      setPostMedia(null);
+      setPostMediaPreview("");
       setUploadProgress(0);
       onSuccess();
     } catch {}
@@ -119,13 +137,13 @@ export default function CreateTab({ onSuccess }: Props) {
           <TabsContent value="post">
             <form onSubmit={handleCreatePost} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <Label>What's on your mind?</Label>
+                <Label>Caption</Label>
                 <Textarea
                   data-ocid="create.textarea"
                   value={postContent}
                   onChange={(e) => setPostContent(e.target.value)}
-                  placeholder="Share something with the world..."
-                  className="bg-input border-border resize-none min-h-[120px]"
+                  placeholder="Write a caption..."
+                  className="bg-input border-border resize-none min-h-[100px]"
                   maxLength={500}
                 />
                 <span className="text-xs text-muted-foreground text-right">
@@ -133,17 +151,54 @@ export default function CreateTab({ onSuccess }: Props) {
                 </span>
               </div>
 
-              {/* Image upload */}
-              {postImagePreview ? (
+              {/* Tags */}
+              <div className="flex flex-col gap-2">
+                <Label>Tags</Label>
+                <Input
+                  data-ocid="create.input"
+                  value={postTags}
+                  onChange={(e) => setPostTags(e.target.value)}
+                  placeholder="#tags (comma separated)"
+                  className="bg-input border-border"
+                />
+              </div>
+
+              {/* Location */}
+              <div className="flex flex-col gap-2">
+                <Label>Location</Label>
                 <div className="relative">
-                  <img
-                    src={postImagePreview}
-                    alt="Preview"
-                    className="w-full rounded-xl object-cover max-h-64"
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    data-ocid="create.input"
+                    value={postLocation}
+                    onChange={(e) => setPostLocation(e.target.value)}
+                    placeholder="Add location"
+                    className="bg-input border-border pl-9"
                   />
+                </div>
+              </div>
+
+              {/* Media upload */}
+              {postMediaPreview ? (
+                <div className="relative">
+                  {postMediaType === "video" ? (
+                    <video
+                      src={postMediaPreview}
+                      controls
+                      className="w-full rounded-xl max-h-64"
+                    >
+                      <track kind="captions" />
+                    </video>
+                  ) : (
+                    <img
+                      src={postMediaPreview}
+                      alt="Preview"
+                      className="w-full rounded-xl object-cover max-h-64"
+                    />
+                  )}
                   <button
                     type="button"
-                    onClick={() => clearImage("post")}
+                    onClick={() => clearMedia("post")}
                     className="absolute top-2 right-2 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
                   >
                     <X className="w-3.5 h-3.5 text-white" />
@@ -161,18 +216,18 @@ export default function CreateTab({ onSuccess }: Props) {
                 <label
                   data-ocid="create.upload_button"
                   className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:border-primary/50 transition-colors"
-                  htmlFor="post-image-upload"
+                  htmlFor="post-media-upload"
                 >
                   <FileImage className="w-8 h-8 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
-                    Add photo
+                    Add photo or video
                   </span>
                   <input
-                    id="post-image-upload"
+                    id="post-media-upload"
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     className="hidden"
-                    onChange={(e) => handleImageSelect(e, "post")}
+                    onChange={(e) => handleMediaSelect(e, "post")}
                   />
                 </label>
               )}
@@ -181,7 +236,7 @@ export default function CreateTab({ onSuccess }: Props) {
                 type="submit"
                 data-ocid="create.post.submit_button"
                 disabled={
-                  createPost.isPending || (!postContent.trim() && !postImage)
+                  createPost.isPending || (!postContent.trim() && !postMedia)
                 }
                 className="h-12 bg-gradient-to-r from-primary to-secondary hover:opacity-90 font-semibold rounded-2xl"
               >
@@ -222,7 +277,7 @@ export default function CreateTab({ onSuccess }: Props) {
                   />
                   <button
                     type="button"
-                    onClick={() => clearImage("story")}
+                    onClick={() => clearMedia("story")}
                     className="absolute top-2 right-2 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
                   >
                     <X className="w-3.5 h-3.5 text-white" />
@@ -243,7 +298,7 @@ export default function CreateTab({ onSuccess }: Props) {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => handleImageSelect(e, "story")}
+                    onChange={(e) => handleMediaSelect(e, "story")}
                   />
                 </label>
               )}

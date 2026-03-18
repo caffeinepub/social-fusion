@@ -22,7 +22,7 @@ export function useGetCallerProfile() {
     },
     enabled: !!actor && !actorFetching,
     staleTime: 0,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
   return {

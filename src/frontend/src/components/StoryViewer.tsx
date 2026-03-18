@@ -1,6 +1,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Principal } from "@icp-sdk/core/principal";
-import { Bookmark, Heart, Send, X } from "lucide-react";
+import {
+  Bookmark,
+  Heart,
+  MessageCircle,
+  MoreHorizontal,
+  Send,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { Profile, Story } from "../backend";
@@ -19,6 +27,8 @@ interface Props {
 
 const STORY_DURATION = 5000;
 
+const MENTION_SUGGESTIONS = ["Priya", "Rahul", "Anjali", "Vikram", "Meera"];
+
 export default function StoryViewer({
   stories,
   author: _author,
@@ -30,13 +40,17 @@ export default function StoryViewer({
   const [paused, setPaused] = useState(false);
   const [liked, setLiked] = useState<boolean[]>(() => stories.map(() => false));
   const [likeAnim, setLikeAnim] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [showCommentSheet, setShowCommentSheet] = useState(false);
   const [commentInput, setCommentInput] = useState("");
+  const [showMentions, setShowMentions] = useState(false);
   const [allComments, setAllComments] = useState<
     { storyIdx: number; comments: Comment[] }[]
   >(() => stories.map((_, i) => ({ storyIdx: i, comments: [] })));
-  const [savedHighlight, setSavedHighlight] = useState(false);
   const pausedRef = useRef(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   pausedRef.current = paused;
 
@@ -46,20 +60,21 @@ export default function StoryViewer({
 
   useEffect(() => {
     setProgress(0);
+    if (showCommentSheet) return; // pause when comment sheet open
     const start = { time: Date.now(), pausedMs: 0, pauseStart: 0 };
-    let paused = false;
+    let localPaused = false;
 
     const interval = setInterval(() => {
       if (pausedRef.current) {
-        if (!paused) {
+        if (!localPaused) {
           start.pauseStart = Date.now();
-          paused = true;
+          localPaused = true;
         }
         return;
       }
-      if (paused) {
+      if (localPaused) {
         start.pausedMs += Date.now() - start.pauseStart;
-        paused = false;
+        localPaused = false;
       }
       const elapsed = Date.now() - start.time - start.pausedMs;
       const pct = Math.min((elapsed / STORY_DURATION) * 100, 100);
@@ -74,7 +89,7 @@ export default function StoryViewer({
       }
     }, 50);
     return () => clearInterval(interval);
-  }, [currentIndex, stories.length, onClose]);
+  }, [currentIndex, stories.length, onClose, showCommentSheet]);
 
   if (!story) return null;
 
@@ -120,8 +135,47 @@ export default function StoryViewer({
     commentInputRef.current?.focus();
   };
 
+  const handleCommentChange = (val: string) => {
+    setCommentInput(val);
+    const lastAt = val.lastIndexOf("@");
+    setShowMentions(lastAt !== -1 && lastAt === val.length - 1);
+  };
+
+  const handleMentionSelect = (name: string) => {
+    const lastAt = commentInput.lastIndexOf("@");
+    setCommentInput(`${commentInput.substring(0, lastAt)}@${name} `);
+    setShowMentions(false);
+    commentInputRef.current?.focus();
+  };
+
+  const handleTap = (e: React.MouseEvent<HTMLElement>) => {
+    if (showCommentSheet) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const third = rect.width / 3;
+    if (x < third) goPrev();
+    else if (x > third * 2) goNext();
+  };
+
+  const handlePointerDown = () => {
+    holdTimerRef.current = setTimeout(() => setPaused(true), 150);
+  };
+
+  const handlePointerUp = () => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    setPaused(false);
+  };
+
   const isLiked = liked[currentIndex];
   const displayName = profile?.displayName || "User";
+
+  const getTimeAgo = () => {
+    const ts = Number(story.timestamp) / 1_000_000;
+    const mins = Math.floor((Date.now() - ts) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    return `${Math.floor(mins / 60)}h ago`;
+  };
 
   return (
     <AnimatePresence>
@@ -129,25 +183,21 @@ export default function StoryViewer({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
-        onClick={onClose}
+        className="fixed inset-0 z-[200] bg-black flex items-center justify-center"
+        style={{ touchAction: "none" }}
       >
-        <motion.div
-          initial={{ scale: 0.95 }}
-          animate={{ scale: 1 }}
-          exit={{ scale: 0.95 }}
+        <div
           className="relative w-full max-w-[430px] h-full max-h-dvh flex flex-col select-none"
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={() => setPaused(true)}
-          onPointerUp={() => setPaused(false)}
-          onPointerLeave={() => setPaused(false)}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
         >
           {/* Progress bars */}
-          <div className="absolute top-2 left-2 right-2 flex gap-1 z-20">
-            {stories.map((s, i) => (
+          <div className="absolute top-0 left-0 right-0 z-20 flex gap-1 px-2 pt-2">
+            {stories.map((_, i) => (
               <div
-                key={s.timestamp.toString() + String(i)}
-                className="flex-1 h-0.5 bg-white/25 rounded-full overflow-hidden"
+                key={`prog-story-${i}-of-${stories.length}`}
+                className="flex-1 h-[2px] bg-white/30 rounded-full overflow-hidden"
               >
                 <div
                   className="h-full bg-white rounded-full transition-none"
@@ -164,193 +214,310 @@ export default function StoryViewer({
             ))}
           </div>
 
-          {/* Pause indicator */}
-          {paused && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-              <div className="w-14 h-14 bg-black/50 rounded-full flex items-center justify-center">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-6 bg-white rounded-full" />
-                  <div className="w-1.5 h-6 bg-white rounded-full" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Header */}
-          <div className="absolute top-6 left-4 right-4 flex items-center justify-between z-20">
+          {/* Top bar: avatar + name + time + close */}
+          <div className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-3 pt-1">
             <div className="flex items-center gap-2">
-              <Avatar className="w-8 h-8 border border-white/50">
+              <Avatar className="w-8 h-8 ring-2 ring-white/40">
                 {profile?.avatar && (
                   <AvatarImage src={profile.avatar.getDirectURL()} />
                 )}
-                <AvatarFallback className="bg-muted text-xs">
-                  {displayName[0]?.toUpperCase() || "?"}
+                <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-xs font-bold">
+                  {displayName[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-white text-sm font-semibold drop-shadow">
-                {displayName}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-white font-semibold text-sm drop-shadow">
+                  {displayName}
+                </span>
+                <span className="text-white/50 text-xs">{getTimeAgo()}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {/* Save to Highlight */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+
+          {/* Story media */}
+          <button
+            type="button"
+            className="absolute inset-0 w-full h-full"
+            onClick={handleTap}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") goPrev();
+              else if (e.key === "ArrowRight") goNext();
+            }}
+            aria-label="Story tap navigation"
+          >
+            {story.image ? (
+              <img
+                src={story.image.getDirectURL()}
+                alt="Story"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div
+                className="w-full h-full flex items-center justify-center"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #1a0a2e 0%, #3d0a3d 50%, #1a0a0a 100%)",
+                }}
+              >
+                <p className="text-white text-xl font-bold px-8 text-center">
+                  {story.content}
+                </p>
+              </div>
+            )}
+            {/* dark gradient overlays */}
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+          </button>
+
+          {/* Double-tap heart anim */}
+          <AnimatePresence>
+            {likeAnim && (
+              <motion.div
+                initial={{ scale: 0, opacity: 1 }}
+                animate={{ scale: 1.4, opacity: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6 }}
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+              >
+                <Heart className="w-24 h-24 fill-red-500 text-red-500" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Story caption text */}
+          {story.content && story.image && (
+            <div className="absolute bottom-24 left-0 right-0 px-4 z-10 pointer-events-none">
+              <p className="text-white text-sm text-center drop-shadow">
+                {story.content}
+              </p>
+            </div>
+          )}
+
+          {/* Bottom actions */}
+          <div className="absolute bottom-4 left-0 right-0 z-20 px-3">
+            <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                data-ocid="story.save_button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSavedHighlight(true);
-                  setTimeout(() => setSavedHighlight(false), 1500);
+                  handleLike();
                 }}
-                className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center"
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+              >
+                <Heart
+                  className={`w-6 h-6 transition-colors ${
+                    isLiked ? "fill-red-500 text-red-500" : "text-white"
+                  }`}
+                />
+                <span className="text-white/50 text-[9px]">Like</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCommentSheet(true);
+                  setPaused(true);
+                }}
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+              >
+                <MessageCircle className="w-6 h-6 text-white" />
+                <span className="text-white/50 text-[9px]">Comment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReply(displayName);
+                  setShowCommentSheet(true);
+                  setPaused(true);
+                }}
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+              >
+                <Send className="w-6 h-6 text-white" />
+                <span className="text-white/50 text-[9px]">Reply</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReply("@");
+                  setShowCommentSheet(true);
+                  setPaused(true);
+                }}
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+              >
+                <span className="text-white w-6 h-6 flex items-center justify-center text-lg font-bold">
+                  @
+                </span>
+                <span className="text-white/50 text-[9px]">Mention</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSaved(!saved);
+                }}
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
               >
                 <Bookmark
-                  className={`w-4 h-4 ${savedHighlight ? "text-yellow-400 fill-yellow-400" : "text-white"}`}
+                  className={`w-6 h-6 transition-colors ${
+                    saved ? "fill-yellow-400 text-yellow-400" : "text-white"
+                  }`}
                 />
+                <span className="text-white/50 text-[9px]">Save</span>
               </button>
+
               <button
                 type="button"
-                data-ocid="story.close_button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onClose();
+                  setMuted(!muted);
                 }}
-                className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center"
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
               >
-                <X className="w-4 h-4 text-white" />
+                <VolumeX
+                  className={`w-6 h-6 transition-colors ${
+                    muted ? "text-yellow-400" : "text-white"
+                  }`}
+                />
+                <span className="text-white/50 text-[9px]">Mute</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+              >
+                <MoreHorizontal className="w-6 h-6 text-white" />
+                <span className="text-white/50 text-[9px]">Share</span>
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Tap zones */}
-          <div className="absolute inset-0 flex z-10" style={{ bottom: 140 }}>
-            <button
-              type="button"
-              className="flex-1 h-full"
-              onClick={(e) => {
-                e.stopPropagation();
-                goPrev();
-              }}
-              aria-label="Previous story"
-            />
-            <button
-              type="button"
-              className="flex-1 h-full"
-              onClick={(e) => {
-                e.stopPropagation();
-                goNext();
-              }}
-              aria-label="Next story"
-            />
-          </div>
+        {/* Comment sheet */}
+        <AnimatePresence>
+          {showCommentSheet && (
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="absolute bottom-0 left-0 right-0 z-[300] rounded-t-3xl overflow-hidden"
+              style={{ background: "rgba(15,10,30,0.97)", maxHeight: "60vh" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <span className="text-white font-semibold text-sm">
+                  Comments
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCommentSheet(false);
+                    setPaused(false);
+                  }}
+                  className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"
+                >
+                  <X className="w-3.5 h-3.5 text-white" />
+                </button>
+              </div>
 
-          {/* Content */}
-          {story.image ? (
-            <img
-              src={story.image.getDirectURL()}
-              alt="Story"
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-600/70 to-purple-700/70 p-8">
-              <p className="text-white text-2xl font-bold text-center leading-snug">
-                {story.content}
-              </p>
-            </div>
-          )}
-
-          {story.image && story.content && (
-            <div className="absolute bottom-36 left-4 right-4 z-10">
-              <p className="text-white text-base font-medium drop-shadow-lg text-center">
-                {story.content}
-              </p>
-            </div>
-          )}
-
-          {/* Bottom interaction zone */}
-          <div
-            className="absolute bottom-0 left-0 right-0 z-20 flex flex-col"
-            style={{
-              background:
-                "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-          >
-            {/* Comments list (last 3) */}
-            {currentComments.length > 0 && (
-              <div className="px-4 pb-1 flex flex-col gap-1 max-h-28 overflow-y-auto">
-                {currentComments.slice(-3).map((c, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: comment order is stable
-                  <div key={i} className="flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shrink-0 mt-0.5">
-                      {c.author[0]?.toUpperCase()}
+              {/* Comments list */}
+              <div
+                className="overflow-y-auto px-4 py-2"
+                style={{ maxHeight: "calc(60vh - 110px)" }}
+              >
+                {currentComments.length === 0 && (
+                  <p className="text-white/30 text-sm text-center py-6">
+                    No comments yet. Be the first!
+                  </p>
+                )}
+                {currentComments.map((c, i) => (
+                  <div
+                    key={`comment-${c.author}-${c.text.slice(0, 10)}-${i}`}
+                    className="flex items-start gap-2 mb-3"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shrink-0">
+                      <span className="text-white text-xs font-bold">
+                        {c.author[0]?.toUpperCase()}
+                      </span>
                     </div>
                     <div className="flex-1">
-                      <span className="text-white/90 text-xs">
-                        <span className="font-semibold">{c.author}</span>{" "}
-                        {c.text}
-                      </span>
+                      <p className="text-white/60 text-xs font-semibold">
+                        {c.author}
+                      </p>
+                      <p className="text-white text-sm">{c.text}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleReply(c.author)}
-                      className="text-white/40 text-[10px] shrink-0 hover:text-white/70"
+                      className="text-white/30 text-xs hover:text-white/60 transition-colors"
                     >
                       Reply
                     </button>
                   </div>
                 ))}
               </div>
-            )}
 
-            {/* Like + Comment input */}
-            <div className="flex items-center gap-2 px-4 pb-4 pt-2">
-              {/* Like */}
-              <motion.button
-                type="button"
-                data-ocid="story.toggle"
-                onClick={handleLike}
-                animate={likeAnim ? { scale: [1, 1.5, 1] } : { scale: 1 }}
-                transition={{ duration: 0.4 }}
-                className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center shrink-0"
-              >
-                <Heart
-                  className={`w-5 h-5 transition-colors ${
-                    isLiked ? "text-pink-500 fill-pink-500" : "text-white"
-                  }`}
-                />
-              </motion.button>
+              {/* Mention suggestions */}
+              <AnimatePresence>
+                {showMentions && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    className="px-4 pb-1 flex gap-2 flex-wrap"
+                  >
+                    {MENTION_SUGGESTIONS.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => handleMentionSelect(name)}
+                        className="text-xs text-pink-400 bg-pink-500/10 px-2 py-1 rounded-full"
+                      >
+                        @{name}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Comment input */}
-              <div className="flex-1 flex items-center gap-2 bg-white/10 rounded-full px-4 h-10 border border-white/20">
+              <div className="flex gap-2 px-4 py-3 border-t border-white/10">
                 <input
                   ref={commentInputRef}
-                  type="text"
                   value={commentInput}
-                  onChange={(e) => setCommentInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendComment();
-                  }}
-                  placeholder="Add a comment..."
-                  className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-white/40"
-                  data-ocid="story.input"
+                  onChange={(e) => handleCommentChange(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendComment()}
+                  placeholder="Add a comment or @mention..."
+                  className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-2 text-white text-sm placeholder:text-white/30 outline-none focus:border-pink-500/50"
                 />
                 <button
                   type="button"
-                  data-ocid="story.submit_button"
                   onClick={handleSendComment}
                   disabled={!commentInput.trim()}
-                  className="text-pink-400 disabled:opacity-30"
+                  className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center disabled:opacity-40"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4 text-white" />
                 </button>
               </div>
-            </div>
-          </div>
-        </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </AnimatePresence>
   );

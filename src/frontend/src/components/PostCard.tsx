@@ -2,8 +2,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Principal } from "@icp-sdk/core/principal";
-import { Heart, Loader2, MessageCircle, Send } from "lucide-react";
-import { useState } from "react";
+import {
+  Heart,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  MoreVertical,
+  Send,
+  Trash2,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import type { PostDTO, Profile } from "../backend";
 import {
   useCommentOnPost,
@@ -16,6 +24,22 @@ interface Props {
   myPrincipal: Principal | null;
   profiles: Map<string, Profile>;
   onUserClick?: (p: Principal) => void;
+  onDelete?: (postId: string) => void;
+}
+
+// Parse encoded content: caption|||tags:...|||loc:...
+function parsePostContent(raw: string) {
+  const parts = raw.split("|||");
+  let caption = parts[0] ?? "";
+  let tags = "";
+  let location = "";
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    if (part.startsWith("tags:")) tags = part.slice(5);
+    else if (part.startsWith("loc:")) location = part.slice(4);
+    else caption += (caption ? " " : "") + part;
+  }
+  return { caption, tags, location };
 }
 
 export default function PostCard({
@@ -23,9 +47,12 @@ export default function PostCard({
   myPrincipal,
   profiles,
   onUserClick,
+  onDelete,
 }: Props) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const likePost = useLikePost();
   const commentOnPost = useCommentOnPost();
   const formatTs = useFormatTimestamp();
@@ -34,6 +61,17 @@ export default function PostCard({
   const isLiked = myPrincipal
     ? post.likes.some((l) => l.toString() === myPrincipal.toString())
     : false;
+  const isMyPost = myPrincipal
+    ? post.author.toString() === myPrincipal.toString()
+    : false;
+
+  const { caption, tags, location } = parsePostContent(post.content);
+  const tagList = tags
+    ? tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
 
   const handleLike = async () => {
     try {
@@ -53,6 +91,11 @@ export default function PostCard({
     } catch {}
   };
 
+  const handleDelete = () => {
+    setMenuOpen(false);
+    onDelete?.(post.id.toString());
+  };
+
   return (
     <article
       data-ocid="feed.post.card"
@@ -63,7 +106,7 @@ export default function PostCard({
         <button
           type="button"
           onClick={() => onUserClick?.(post.author)}
-          className="flex items-center gap-3"
+          className="flex items-center gap-3 flex-1"
         >
           <Avatar className="w-9 h-9">
             {authorProfile?.avatar && (
@@ -82,6 +125,36 @@ export default function PostCard({
             </p>
           </div>
         </button>
+
+        {/* 3-dot menu for own posts */}
+        {isMyPost && (
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              data-ocid="feed.post.button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
+            >
+              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+            </button>
+            {menuOpen && (
+              <div
+                className="absolute right-0 top-9 z-10 bg-card border border-border rounded-xl shadow-xl py-1 min-w-[140px]"
+                onBlur={() => setMenuOpen(false)}
+              >
+                <button
+                  type="button"
+                  data-ocid="feed.post.delete_button"
+                  onClick={handleDelete}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-muted transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Post
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Image */}
@@ -94,9 +167,37 @@ export default function PostCard({
         />
       )}
 
-      {/* Content */}
-      {post.content && (
-        <p className="px-3 py-2 text-sm leading-relaxed">{post.content}</p>
+      {/* Caption */}
+      {caption && (
+        <p className="px-3 py-2 text-sm leading-relaxed">{caption}</p>
+      )}
+
+      {/* Tags */}
+      {tagList.length > 0 && (
+        <div className="px-3 pb-1 flex flex-wrap gap-1">
+          {tagList.map((tag) => (
+            <span
+              key={tag}
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))",
+                color: "#f472b6",
+                border: "1px solid rgba(236,72,153,0.2)",
+              }}
+            >
+              {tag.startsWith("#") ? tag : `#${tag}`}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Location */}
+      {location && (
+        <div className="px-3 pb-2 flex items-center gap-1">
+          <MapPin className="w-3 h-3 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{location}</span>
+        </div>
       )}
 
       {/* Actions */}

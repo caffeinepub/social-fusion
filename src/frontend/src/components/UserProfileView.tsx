@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Crown,
   Gift,
   Grid,
   Loader2,
@@ -18,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCallSignal } from "../hooks/useCallSignal";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
@@ -78,11 +79,22 @@ export default function UserProfileView({
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const { blockUser } = useBlockedUsers();
 
+  // Check premium status from localStorage
+  const [isPremium, setIsPremium] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("socialFusionPremium");
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.isPremium && data.expiry > Date.now()) setIsPremium(true);
+      }
+    } catch {}
+  }, []);
+
   const isMe = myPrincipal?.toString() === principal.toString();
   const isFollowing =
     followers?.some((f) => f.toString() === myPrincipal?.toString()) ?? false;
 
-  // Build carousel images
   const carouselImages: string[] = [];
   if (profile?.avatar) carouselImages.push(profile.avatar.getDirectURL());
   if (posts) {
@@ -107,9 +119,7 @@ export default function UserProfileView({
 
   const handleCallClick = (mode: "voice" | "video") => {
     setOutgoingCall(mode);
-    // Broadcast to other tabs
     if (myPrincipal) broadcastCall(myPrincipal.toString(), mode);
-    // Fallback: simulate accept after 3s for same-tab testing
     setTimeout(() => {
       setOutgoingCall(null);
       setCallMode(mode);
@@ -124,7 +134,7 @@ export default function UserProfileView({
     } catch {}
   };
 
-  const handleSpecialThanks = async () => {
+  const handleSpecialThanks = () => {
     setThanksAnim(true);
     setTimeout(() => setThanksAnim(false), 1500);
   };
@@ -227,6 +237,36 @@ export default function UserProfileView({
         </div>
       )}
 
+      {/* Thoughts ticker */}
+      {profile.thoughts && (
+        <div
+          className="relative overflow-hidden shrink-0"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))",
+            borderBottom: "1px solid rgba(236,72,153,0.2)",
+          }}
+        >
+          <div className="flex items-center gap-2 py-2 px-4">
+            <span className="text-pink-400 text-xs shrink-0">💭</span>
+            <div className="overflow-hidden">
+              <motion.p
+                className="text-pink-300/80 text-xs font-medium whitespace-nowrap"
+                animate={{ x: ["-0%", "-100%"] }}
+                transition={{
+                  duration: 12,
+                  repeat: Number.POSITIVE_INFINITY,
+                  ease: "linear",
+                }}
+              >
+                {profile.thoughts} &nbsp;&nbsp;&nbsp; ✦ &nbsp;&nbsp;&nbsp;{" "}
+                {profile.thoughts}
+              </motion.p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Image Carousel */}
       <div className="relative w-full" style={{ aspectRatio: "4/5" }}>
         {carouselImages.length > 0 ? (
@@ -245,6 +285,7 @@ export default function UserProfileView({
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-pink-900/60 to-purple-900/60 flex items-center justify-center">
             <Avatar className="w-32 h-32">
+              <AvatarImage src="" />
               <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-5xl font-bold">
                 {profile.displayName[0]?.toUpperCase()}
               </AvatarFallback>
@@ -294,8 +335,30 @@ export default function UserProfileView({
       </div>
 
       {/* Profile content */}
-      <div className="px-4 -mt-4 relative z-10">
-        <h2 className="text-2xl font-bold text-white">{profile.displayName}</h2>
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="px-4 -mt-4 relative z-10"
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-2xl font-bold text-white">
+            {profile.displayName}
+          </h2>
+          {isPremium && (
+            <span
+              className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold"
+              style={{
+                background: "linear-gradient(135deg, #78350f, #d97706)",
+                color: "#fef3c7",
+                boxShadow: "0 0 8px rgba(217,119,6,0.4)",
+              }}
+            >
+              <Crown className="w-3 h-3" />
+              Premium
+            </span>
+          )}
+        </div>
         <ProfileBadges
           principalStr={principal.toString()}
           className="mt-1.5 mb-1"
@@ -484,7 +547,7 @@ export default function UserProfileView({
 
         {/* Matrimonial Info Fields */}
         <MatrimonialFields profile={profile} />
-      </div>
+      </motion.div>
 
       {/* Posts grid */}
       <div className="border-t border-white/5 mt-4">
@@ -580,7 +643,6 @@ export default function UserProfileView({
         )}
       </AnimatePresence>
 
-      {/* Outgoing call overlay */}
       <AnimatePresence>
         {outgoingCall && (
           <OutgoingCallOverlay
@@ -591,7 +653,6 @@ export default function UserProfileView({
         )}
       </AnimatePresence>
 
-      {/* Incoming call overlay */}
       <AnimatePresence>
         {incomingCall && (
           <IncomingCallOverlay
@@ -612,7 +673,6 @@ export default function UserProfileView({
         recipientName={profile.displayName}
       />
 
-      {/* Follow/Followers sheet */}
       <AnimatePresence>
         {followSheet && (
           <FollowListSheet
@@ -630,6 +690,56 @@ export default function UserProfileView({
   );
 }
 
+// ── Hobby floating bubbles ─────────────────────────────────────────────────
+function FloatingHobbyBubbles({ hobbies }: { hobbies: string }) {
+  const items = hobbies
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  if (items.length === 0) return null;
+
+  const colors = [
+    ["#10b981", "#06b6d4"],
+    ["#ec4899", "#a855f7"],
+    ["#f59e0b", "#ef4444"],
+    ["#6366f1", "#8b5cf6"],
+    ["#14b8a6", "#06b6d4"],
+    ["#f97316", "#ec4899"],
+    ["#84cc16", "#22c55e"],
+    ["#a855f7", "#ec4899"],
+  ];
+
+  return (
+    <div>
+      <p className="text-white/40 text-xs mb-3">🎨 Hobbies</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, i) => (
+          <motion.span
+            key={item}
+            className="px-3 py-1.5 rounded-full text-xs font-medium text-white shadow-sm cursor-default"
+            style={{
+              background: `linear-gradient(135deg, ${colors[i % colors.length][0]}, ${colors[i % colors.length][1]})`,
+            }}
+            animate={{
+              y: [0, -4, 0],
+            }}
+            transition={{
+              duration: 2.5 + ((i * 0.3) % 1.5),
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+              delay: (i * 0.4) % 2,
+            }}
+          >
+            {item}
+          </motion.span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MatrimonialFields({
   profile,
 }: { profile: import("../backend").Profile }) {
@@ -639,12 +749,6 @@ function MatrimonialFields({
       icon: "✨",
       value: profile.interests,
       gradient: "from-pink-500 to-purple-600",
-    },
-    {
-      label: "Hobbies",
-      icon: "🎨",
-      value: profile.hobbies,
-      gradient: "from-green-500 to-teal-500",
     },
     {
       label: "Favourite Movies",
@@ -672,20 +776,36 @@ function MatrimonialFields({
     },
   ].filter((s) => s.value?.trim());
 
-  if (sections.length === 0) return null;
+  const hasHobbies = !!profile.hobbies?.trim();
+
+  if (sections.length === 0 && !hasHobbies) return null;
 
   return (
-    <div className="mt-4 flex flex-col gap-4">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: 0.2 }}
+      className="mt-4 flex flex-col gap-4"
+    >
       <h3 className="text-white/50 text-xs font-semibold uppercase tracking-widest">
         About
       </h3>
+
+      {/* Floating hobby bubbles */}
+      {hasHobbies && <FloatingHobbyBubbles hobbies={profile.hobbies} />}
+
       {sections.map((section) => {
         const items = section.value
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
         return (
-          <div key={section.label}>
+          <motion.div
+            key={section.label}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+          >
             <p className="text-white/40 text-xs mb-2">
               {section.icon} {section.label}
             </p>
@@ -699,9 +819,9 @@ function MatrimonialFields({
                 </span>
               ))}
             </div>
-          </div>
+          </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 }
