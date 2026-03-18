@@ -4,7 +4,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { FileImage, ImagePlus, Loader2, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { ExternalBlob } from "../../backend";
 import { useCreatePost, useCreateStory } from "../../hooks/useQueries";
 
@@ -58,7 +57,6 @@ export default function CreateTab({ onSuccess }: Props) {
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!postContent.trim() && !postImage) {
-      toast.error("Add some content or an image");
       return;
     }
     try {
@@ -70,17 +68,13 @@ export default function CreateTab({ onSuccess }: Props) {
       setPostImage(null);
       setPostImagePreview("");
       setUploadProgress(0);
-      toast.success("Post shared!");
       onSuccess();
-    } catch {
-      toast.error("Failed to create post");
-    }
+    } catch {}
   };
 
   const handleCreateStory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storyContent.trim() && !storyImage) {
-      toast.error("Add some content or an image");
       return;
     }
     try {
@@ -92,11 +86,8 @@ export default function CreateTab({ onSuccess }: Props) {
       setStoryImage(null);
       setStoryImagePreview("");
       setUploadProgress(0);
-      toast.success("Story posted!");
       onSuccess();
-    } catch {
-      toast.error("Failed to create story");
-    }
+    } catch {}
   };
 
   return (

@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Radio } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 interface Props {
   onBack: () => void;
@@ -15,7 +14,6 @@ export default function LiveStreamsScreen({ onBack }: Props) {
     setIsGoingLive(true);
     setTimeout(() => {
       setIsGoingLive(false);
-      toast.success("You're live! 🔴");
     }, 2000);
   };
 

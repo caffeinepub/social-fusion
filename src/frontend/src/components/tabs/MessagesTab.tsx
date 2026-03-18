@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { toast } from "sonner";
 import type { Profile } from "../../backend";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
@@ -336,9 +335,7 @@ function ConversationView({
     try {
       await sendMessage.mutateAsync({ to: otherUser, content: text.trim() });
       setText("");
-    } catch {
-      toast.error("Failed to send message");
-    }
+    } catch {}
   };
 
   const handleLongPress = (e: React.MouseEvent, msgIndex: number) => {

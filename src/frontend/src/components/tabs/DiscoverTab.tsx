@@ -10,7 +10,6 @@ import {
   useTransform,
 } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import type { Profile } from "../../backend";
 import {
   useGetTinderQueue,
@@ -72,7 +71,6 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
     if (boostActive) return;
     setBoostActive(true);
     setBoostCountdown(30);
-    toast.success("⚡ Boost activated! You're on top for 30s");
     boostTimerRef.current = setInterval(() => {
       setBoostCountdown((c) => {
         if (c <= 1) {
@@ -343,7 +341,6 @@ function SwipeCard({
   };
 
   const handleSuperlike = () => {
-    toast.success("💫 Super Like!");
     onLike();
   };
 

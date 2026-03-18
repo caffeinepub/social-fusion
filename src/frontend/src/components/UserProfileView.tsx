@@ -14,7 +14,6 @@ import {
   Video,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useFollow,
@@ -59,10 +58,7 @@ export default function UserProfileView({
         user: principal,
         following: isFollowing,
       });
-      toast.success(isFollowing ? "Unfollowed" : "Following!");
-    } catch {
-      toast.error("Action failed");
-    }
+    } catch {}
   };
 
   if (callMode) {
@@ -221,7 +217,6 @@ export default function UserProfileView({
                 data-ocid="user_profile.secondary_button"
                 onClick={() => {
                   if (onMessage) onMessage();
-                  else toast.success("Opening chat...");
                 }}
                 className="flex flex-col items-center gap-1.5 bg-gradient-to-br from-purple-600 to-violet-700 rounded-xl py-2.5 px-1"
               >

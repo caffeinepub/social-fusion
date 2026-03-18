@@ -1,5 +1,6 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import type {
   Message,
   Notification,
@@ -386,4 +387,32 @@ export function useGetCallerProfileForAuth() {
     isLoading: actorFetching || query.isLoading,
     isFetched: !!actor && query.isFetched,
   };
+}
+
+export function usePrefetchAll() {
+  const { actor, isFetching } = useActor();
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    qc.prefetchQuery({
+      queryKey: ["tinderQueue"],
+      queryFn: () => actor.getTinderQueue(),
+    });
+    qc.prefetchQuery({
+      queryKey: ["allProfiles"],
+      queryFn: () => actor.getAllProfiles(),
+    });
+    qc.prefetchQuery({
+      queryKey: ["notifications"],
+      queryFn: () => actor.getNotifications(),
+    });
+    qc.prefetchQuery({
+      queryKey: ["matches"],
+      queryFn: () => actor.getMatches(),
+    });
+    qc.prefetchQuery({
+      queryKey: ["notificationCount"],
+      queryFn: () => actor.getUnreadNotificationCount(),
+    });
+  }, [actor, isFetching, qc]);
 }

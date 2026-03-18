@@ -1,6 +1,5 @@
 import { X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { toast } from "sonner";
 
 interface Props {
   open: boolean;
@@ -24,8 +23,7 @@ export default function GiftSheet({
   onClose,
   recipientName = "them",
 }: Props) {
-  const handleSend = (gift: (typeof GIFTS)[0]) => {
-    toast.success(`🎁 ${gift.emoji} ${gift.name} sent to ${recipientName}!`);
+  const handleSend = (_gift: (typeof GIFTS)[0]) => {
     onClose();
   };
 

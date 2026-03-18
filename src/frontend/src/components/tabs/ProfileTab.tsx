@@ -40,7 +40,6 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { ExternalBlob } from "../../backend";
 import type { Profile } from "../../backend";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
@@ -562,11 +561,8 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
         ...form,
         avatar: avatarBlob ?? profile?.avatar ?? undefined,
       } as Profile);
-      toast.success("Profile updated!");
       setOpen(false);
-    } catch {
-      toast.error("Update failed");
-    }
+    } catch {}
   };
 
   return (

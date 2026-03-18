@@ -13,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Camera, Loader2, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { ExternalBlob } from "../backend";
 import { useCreateProfile } from "../hooks/useQueries";
 
@@ -41,7 +40,6 @@ export default function ProfileSetup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!displayName.trim()) {
-      toast.error("Please enter a display name");
       return;
     }
     try {
@@ -55,10 +53,7 @@ export default function ProfileSetup() {
         birthday: birthday.trim(),
         relationshipStatus,
       });
-      toast.success("Profile created!");
-    } catch {
-      toast.error("Failed to create profile");
-    }
+    } catch {}
   };
 
   return (

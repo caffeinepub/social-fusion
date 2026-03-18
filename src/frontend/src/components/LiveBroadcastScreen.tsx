@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mic, MicOff, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
 interface Props {
   onBack: () => void;
@@ -77,7 +76,6 @@ export default function LiveBroadcastScreen({ onBack }: Props) {
 
   const handleJoinRequest = () => {
     setJoinRequested(true);
-    toast.success("Join request sent!");
     // Simulate grant after 3s
     setTimeout(() => setGuestJoined(true), 3000);
   };

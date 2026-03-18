@@ -1,27 +1,25 @@
-# Social Fusion v6
+# Social Fusion
 
 ## Current State
-Full social media app with Browse/Requests/Matches/Chats/Profile tabs. Global header shows "Social Fusion" logo + bell icon. Discover (Browse) tab has its own internal layout. MessagesTab has a chat list and opens individual chats. ProfileTab has user info and settings.
+Version 6 is fully deployed with all features. Data loads via React Query with staleTime of 30s. Toast notifications (sonner) appear throughout the app on actions. Data fetching starts only after actor is initialized, causing perceived slow loading of profiles.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Browse tab header: search icon + heart icon (replaces global header on browse tab). Heart icon click opens NotificationsPanel.
-- Chat settings panel: opens when settings icon clicked in MessagesTab. Contains tabs: Chat Settings, Privacy, Inbox, Pending Requests, Stars (who starred me), Online Users list below search box.
-- Full-screen chat: when a conversation is open, hide bottom navbar completely. Chat UI like Facebook Messenger (bubbles, reactions, seen/delivered, online dot, call/video icons in header).
-- Profile: add more info fields — interests, hobbies, favourite movies, favourite songs, education, thoughts/thinking about. Support 7 photos. Add background/cover image upload at top of profile.
+- Prefetch critical queries (tinderQueue, allProfiles, notifications, callerProfile) immediately when actor is ready to eliminate loading spinners
 
 ### Modify
-- Browse tab: remove global header when on browse tab; show inline header with search icon + heart icon only.
-- Profile: expand profile card to show new fields and cover photo upload.
-- MessagesTab: full-screen chat hides BottomNav; chat settings panel accessible from settings icon.
+- Remove `<Toaster>` component from App.tsx so no toast messages appear
+- Replace all `toast.success` and `toast.error` calls with silent no-ops (remove them entirely) across all components
+- Increase staleTime in QueryClient to reduce re-fetches
+- Add prefetching hook that fires all key queries in parallel as soon as actor is available
 
 ### Remove
-- Global header hidden when on Browse tab (shown only for other tabs or removed entirely if browse always shows inline header).
+- All visible toast/notification pop-ups from the UI
 
 ## Implementation Plan
-1. App.tsx: conditionally hide global header when activeTab === 'browse'; pass setNotifOpen + chat open state up so BottomNav can be hidden when chat is open.
-2. DiscoverTab: add header row with Search icon + Heart icon (heart opens notifications).
-3. MessagesTab: add settings icon that opens ChatSettingsPanel; track chatOpen state and pass up to hide BottomNav; full-screen chat view with Facebook Messenger style.
-4. ChatSettingsPanel: new component with tabs (Settings, Privacy, Inbox, Pending, Stars, Online).
-5. ProfileTab: add cover image upload, 7 profile photos, and new fields (interests, hobbies, fav movies, fav songs, education, thoughts).
+1. Remove `<Toaster>` from App.tsx
+2. Remove all `import { toast } from 'sonner'` and `toast.*` calls from every component file
+3. Add a `usePrefetchAll` hook that prefetches tinderQueue, allProfiles, notifications, callerProfile in parallel when actor is ready
+4. Call `usePrefetchAll` in AppInner so data is warm before the user sees any screen
+5. Increase staleTime to 60s in QueryClient config

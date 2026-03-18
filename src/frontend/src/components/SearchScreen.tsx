@@ -7,7 +7,6 @@ import { Switch } from "@/components/ui/switch";
 import type { Principal } from "@icp-sdk/core/principal";
 import { ArrowLeft, Heart, Search, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useGetAllProfiles } from "../hooks/useQueries";
 
 type FilterKey = "age" | "gender" | "distance" | "online" | "verified" | null;
@@ -268,7 +267,6 @@ export default function SearchScreen({
                 <Button
                   data-ocid={`search.primary_button.${i + 1}`}
                   size="sm"
-                  onClick={() => toast.success(`Liked ${profile.displayName}!`)}
                   className="w-9 h-9 p-0 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 border-0 shrink-0"
                 >
                   <Heart className="w-4 h-4 text-white" />

@@ -1,4 +1,3 @@
-import { Toaster } from "@/components/ui/sonner";
 import type { Principal } from "@icp-sdk/core/principal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
@@ -14,11 +13,11 @@ import MessagesTab from "./components/tabs/MessagesTab";
 import ProfileTab from "./components/tabs/ProfileTab";
 import RequestsTab from "./components/tabs/RequestsTab";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
-import { useGetCallerProfileForAuth } from "./hooks/useQueries";
+import { useGetCallerProfileForAuth, usePrefetchAll } from "./hooks/useQueries";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000 },
+    queries: { staleTime: 60_000 },
   },
 });
 
@@ -26,12 +25,12 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppInner />
-      <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
 }
 
 function AppInner() {
+  usePrefetchAll();
   const { identity, isInitializing } = useInternetIdentity();
   const isAuthenticated = !!identity;
 

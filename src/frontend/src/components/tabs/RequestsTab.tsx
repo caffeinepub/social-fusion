@@ -4,7 +4,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
 import { Check, MessageCircle, Phone, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
   useGetAllProfiles,
@@ -31,19 +30,13 @@ export default function RequestsTab({ onUserClick }: Props) {
   const handleAccept = async (user: Principal) => {
     try {
       await tinderLike.mutateAsync(user);
-      toast.success("Accepted! Check your matches 💘");
-    } catch {
-      toast.error("Failed");
-    }
+    } catch {}
   };
 
   const handleDecline = async (user: Principal) => {
     try {
       await tinderPass.mutateAsync(user);
-      toast("Declined");
-    } catch {
-      toast.error("Failed");
-    }
+    } catch {}
   };
 
   if (callingUser) {
@@ -163,7 +156,6 @@ export default function RequestsTab({ onUserClick }: Props) {
                   <Button
                     data-ocid={`requests.secondary_button.${i + 1}`}
                     size="sm"
-                    onClick={() => toast.success("Chat opened!")}
                     className="flex-1 h-8 rounded-full bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs gap-1.5"
                     variant="ghost"
                   >

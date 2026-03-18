@@ -10,7 +10,6 @@ import {
 import { Camera, Image, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 
 const GRADIENT_OPTIONS = [
   { id: "g1", from: "#ff0080", to: "#7c3aed", label: "Neon" },
@@ -39,7 +38,6 @@ export default function StoryCreatorSheet({ open, onClose }: Props) {
   };
 
   const handleShare = () => {
-    toast.success("Story shared! ✨");
     setText("");
     setPreviewImage(null);
     onClose();

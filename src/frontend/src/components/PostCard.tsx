@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import type { Principal } from "@icp-sdk/core/principal";
 import { Heart, Loader2, MessageCircle, Send } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import type { PostDTO, Profile } from "../backend";
 import {
   useCommentOnPost,
@@ -39,9 +38,7 @@ export default function PostCard({
   const handleLike = async () => {
     try {
       await likePost.mutateAsync({ postId: post.id, liked: isLiked });
-    } catch {
-      toast.error("Failed to update like");
-    }
+    } catch {}
   };
 
   const handleComment = async (e: React.FormEvent) => {
@@ -53,9 +50,7 @@ export default function PostCard({
         content: commentText.trim(),
       });
       setCommentText("");
-    } catch {
-      toast.error("Failed to post comment");
-    }
+    } catch {}
   };
 
   return (
