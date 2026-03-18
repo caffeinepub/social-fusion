@@ -21,9 +21,10 @@ import {
   Star,
   ThumbsUp,
   Video,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Profile } from "../../backend";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
@@ -34,6 +35,8 @@ import {
 } from "../../hooks/useQueries";
 import CallHistoryScreen from "../CallHistoryScreen";
 import CallScreen from "../CallScreen";
+import IncomingCallOverlay from "../IncomingCallOverlay";
+import OutgoingCallOverlay from "../OutgoingCallOverlay";
 
 const REACTION_EMOJIS = ["❤️", "🔥", "😂", "😮", "😢", "👏"];
 
@@ -65,6 +68,68 @@ const CHAT_THEMES = [
   },
 ];
 
+const EMOJI_LIST = [
+  "😀",
+  "😂",
+  "😍",
+  "🥰",
+  "😎",
+  "😭",
+  "😡",
+  "🤔",
+  "😴",
+  "🤗",
+  "👍",
+  "👎",
+  "❤️",
+  "🔥",
+  "✨",
+  "🎉",
+  "💯",
+  "🙏",
+  "👏",
+  "💪",
+  "😘",
+  "🥺",
+  "😅",
+  "😊",
+  "🤣",
+  "😇",
+  "🤩",
+  "😜",
+  "🤪",
+  "😏",
+  "💖",
+  "💕",
+  "💔",
+  "💋",
+  "🌹",
+  "🌺",
+  "🎀",
+  "🦋",
+  "⭐",
+  "🌙",
+  "👋",
+  "✌️",
+  "🤞",
+  "🤙",
+  "🖤",
+  "💜",
+  "💙",
+  "💚",
+  "💛",
+  "🧡",
+  "🐱",
+  "🐶",
+  "🐰",
+  "🦊",
+  "🐼",
+  "🦄",
+  "🍕",
+  "🎵",
+  "⚽",
+  "🏀",
+];
 export default function MessagesTab({
   onChatOpenChange,
 }: { onChatOpenChange?: (open: boolean) => void }) {
@@ -121,6 +186,7 @@ function ConversationList({
   onCallHistory: () => void;
   onSettings: () => void;
 }) {
+  const [showNewChatSheet, setShowNewChatSheet] = useState(false);
   const { data: profiles, isLoading } = useGetAllProfiles();
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
@@ -129,153 +195,213 @@ function ConversationList({
     profiles?.filter(([p]) => p.toString() !== myPrincipal?.toString()) ?? [];
 
   return (
-    <div
-      data-ocid="messages.page"
-      className="flex flex-col h-full bg-[#0a0a0f]"
-    >
-      {/* Header */}
-      <div className="flex items-center px-4 pt-5 pb-3 shrink-0">
-        <button
-          type="button"
-          data-ocid="messages.secondary_button"
-          className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mr-2"
-          onClick={onSettings}
-        >
-          <Settings className="w-4 h-4 text-white/70" />
-        </button>
-        <h1 className="text-xl font-bold font-display text-white flex-1 text-center">
-          Chats
-        </h1>
-        <div className="flex items-center gap-1.5">
+    <>
+      <div
+        data-ocid="messages.page"
+        className="flex flex-col h-full bg-[#0a0a0f]"
+      >
+        {/* Header */}
+        <div className="flex items-center px-4 pt-5 pb-3 shrink-0">
           <button
             type="button"
-            data-ocid="messages.toggle"
-            onClick={onCallHistory}
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-            title="Call History"
+            data-ocid="messages.secondary_button"
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center mr-2"
+            onClick={onSettings}
           >
-            <Inbox className="w-4 h-4 text-white/70" />
+            <Settings className="w-4 h-4 text-white/70" />
           </button>
-          <button
-            type="button"
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-          >
-            <Star className="w-4 h-4 text-white/70" />
-          </button>
-          <button
-            type="button"
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-          >
-            <Edit className="w-4 h-4 text-white/70" />
-          </button>
-        </div>
-      </div>
-
-      {/* Search bar */}
-      <div className="px-4 pb-3 shrink-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-          <Input
-            data-ocid="messages.search_input"
-            placeholder="Search or start new chat"
-            className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 h-10 rounded-xl"
-          />
-        </div>
-      </div>
-
-      {/* Story row */}
-      <div className="px-4 pb-3 shrink-0">
-        <button
-          type="button"
-          data-ocid="messages.upload_button"
-          className="flex flex-col items-center gap-1"
-        >
-          <div className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/40 flex items-center justify-center bg-pink-500/5">
-            <Plus className="w-5 h-5 text-pink-400" />
+          <h1 className="text-xl font-bold font-display text-white flex-1 text-center">
+            Chats
+          </h1>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              data-ocid="messages.toggle"
+              onClick={onCallHistory}
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+              title="Call History"
+            >
+              <Inbox className="w-4 h-4 text-white/70" />
+            </button>
+            <button
+              type="button"
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Star className="w-4 h-4 text-white/70" />
+            </button>
+            <button
+              type="button"
+              data-ocid="messages.edit_button"
+              onClick={() => setShowNewChatSheet(true)}
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Edit className="w-4 h-4 text-white/70" />
+            </button>
           </div>
-          <span className="text-white/40 text-[10px]">Story</span>
-        </button>
-      </div>
+        </div>
 
-      <div className="h-px bg-white/5 mx-4 shrink-0" />
-
-      <div className="flex-1 overflow-y-auto pb-20">
-        {isLoading ? (
-          <div className="p-3 flex flex-col gap-3">
-            {["s1", "s2", "s3", "s4"].map((sk) => (
-              <div
-                key={sk}
-                data-ocid="messages.loading_state"
-                className="flex items-center gap-3 p-3"
-              >
-                <Skeleton className="w-12 h-12 rounded-full" />
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <Skeleton className="w-32 h-3" />
-                  <Skeleton className="w-24 h-2" />
-                </div>
-              </div>
-            ))}
+        {/* Search bar */}
+        <div className="px-4 pb-3 shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Input
+              data-ocid="messages.search_input"
+              placeholder="Search or start new chat"
+              className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 h-10 rounded-xl"
+            />
           </div>
-        ) : otherUsers.length > 0 ? (
-          <div className="flex flex-col">
-            {otherUsers.map(([principal, profile]: [Principal, Profile], i) => (
+        </div>
+
+        {/* Story / Online Users row */}
+        <div className="px-4 pb-3 shrink-0">
+          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
+            {/* Add Story */}
+            <div className="flex flex-col items-center gap-1 shrink-0">
               <button
-                key={principal.toString()}
                 type="button"
-                data-ocid={`messages.item.${i + 1}`}
-                onClick={() => onSelect({ principal, profile })}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                data-ocid="messages.upload_button"
+                className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/50 bg-pink-500/10 flex items-center justify-center active:scale-95 transition-transform"
               >
-                {/* Avatar with gradient ring + online dot */}
-                <div className="relative shrink-0">
-                  <div
-                    className="w-13 h-13 rounded-full p-[2px]"
-                    style={{
-                      background: "linear-gradient(135deg, #ec4899, #a855f7)",
-                    }}
-                  >
-                    <Avatar className="w-11 h-11 block">
-                      {profile.avatar && (
-                        <AvatarImage src={profile.avatar.getDirectURL()} />
-                      )}
-                      <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
-                        {profile.displayName[0]?.toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
-                  {/* Online dot on first 3 users */}
-                  {i < 3 && (
-                    <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
-                  )}
-                </div>
-                <div className="flex flex-col text-left min-w-0 flex-1">
-                  <p className="font-semibold text-white text-sm">
-                    {profile.displayName}
-                  </p>
-                  <p className="text-xs text-white/40 truncate">
-                    {profile.bio || "Tap to chat"}
-                  </p>
-                </div>
-                <span className="text-white/20 text-xs shrink-0">now</span>
+                <Plus className="w-5 h-5 text-pink-400" />
               </button>
-            ))}
-          </div>
-        ) : (
-          <div
-            data-ocid="messages.empty_state"
-            className="flex flex-col items-center justify-center py-20 text-center gap-4 px-8"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
-              <PhoneIcon className="w-7 h-7 text-white/20" />
+              <span className="text-white/40 text-[10px]">Add story</span>
             </div>
-            <p className="text-white/50 font-semibold">No conversations yet</p>
-            <p className="text-white/30 text-sm">
-              Match with someone to start chatting!
-            </p>
+            {/* Online users */}
+            {otherUsers
+              .filter((_, idx) => idx % 2 === 0)
+              .slice(0, 8)
+              .map(([principal, profile]) => (
+                <div
+                  key={principal.toString()}
+                  className="flex flex-col items-center gap-1 shrink-0"
+                >
+                  <div className="relative">
+                    <div
+                      className="w-14 h-14 rounded-full p-[2px]"
+                      style={{
+                        background: "linear-gradient(135deg, #ec4899, #a855f7)",
+                      }}
+                    >
+                      <div className="w-full h-full rounded-full overflow-hidden bg-[#0a0a0f]">
+                        {profile.avatar ? (
+                          <img
+                            src={profile.avatar.getDirectURL()}
+                            alt={profile.displayName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-gradient-to-br from-pink-500/30 to-purple-600/30 flex items-center justify-center text-white text-sm font-bold">
+                            {profile.displayName[0]?.toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
+                  </div>
+                  <span className="text-white/50 text-[10px] w-14 text-center truncate">
+                    {profile.displayName}
+                  </span>
+                </div>
+              ))}
           </div>
-        )}
+        </div>
+
+        <div className="h-px bg-white/5 mx-4 shrink-0" />
+
+        <div className="flex-1 overflow-y-auto pb-20">
+          {isLoading ? (
+            <div className="p-3 flex flex-col gap-3">
+              {["s1", "s2", "s3", "s4"].map((sk) => (
+                <div
+                  key={sk}
+                  data-ocid="messages.loading_state"
+                  className="flex items-center gap-3 p-3"
+                >
+                  <Skeleton className="w-12 h-12 rounded-full" />
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <Skeleton className="w-32 h-3" />
+                    <Skeleton className="w-24 h-2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : otherUsers.length > 0 ? (
+            <div className="flex flex-col">
+              {otherUsers.map(
+                ([principal, profile]: [Principal, Profile], i) => (
+                  <button
+                    key={principal.toString()}
+                    type="button"
+                    data-ocid={`messages.item.${i + 1}`}
+                    onClick={() => onSelect({ principal, profile })}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                  >
+                    {/* Avatar with gradient ring + online dot */}
+                    <div className="relative shrink-0">
+                      <div
+                        className="w-13 h-13 rounded-full p-[2px]"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #ec4899, #a855f7)",
+                        }}
+                      >
+                        <Avatar className="w-11 h-11 block">
+                          {profile.avatar && (
+                            <AvatarImage src={profile.avatar.getDirectURL()} />
+                          )}
+                          <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
+                            {profile.displayName[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                      {/* Online dot on first 3 users */}
+                      {i < 3 && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
+                      )}
+                    </div>
+                    <div className="flex flex-col text-left min-w-0 flex-1">
+                      <p className="font-semibold text-white text-sm">
+                        {profile.displayName}
+                      </p>
+                      <p className="text-xs text-white/40 truncate">
+                        {profile.bio || "Tap to chat"}
+                      </p>
+                    </div>
+                    <span className="text-white/20 text-xs shrink-0">now</span>
+                  </button>
+                ),
+              )}
+            </div>
+          ) : (
+            <div
+              data-ocid="messages.empty_state"
+              className="flex flex-col items-center justify-center py-20 text-center gap-4 px-8"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
+                <PhoneIcon className="w-7 h-7 text-white/20" />
+              </div>
+              <p className="text-white/50 font-semibold">
+                No conversations yet
+              </p>
+              <p className="text-white/30 text-sm">
+                Match with someone to start chatting!
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      <NewChatBottomSheet
+        open={showNewChatSheet}
+        onClose={() => setShowNewChatSheet(false)}
+        profiles={profiles ?? []}
+        myPrincipal={myPrincipal ?? null}
+        onSelect={(u) => {
+          setShowNewChatSheet(false);
+          onSelect(u);
+        }}
+      />
+    </>
   );
 }
 
@@ -304,6 +430,129 @@ function TypingIndicator() {
   );
 }
 
+function NewChatBottomSheet({
+  open,
+  onClose,
+  profiles,
+  myPrincipal,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  profiles: Array<[Principal, Profile]>;
+  myPrincipal: import("@icp-sdk/core/principal").Principal | null;
+  onSelect: (u: { principal: Principal; profile: Profile }) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const others = profiles.filter(
+    ([p]) => p.toString() !== myPrincipal?.toString(),
+  );
+  const filtered = query.trim()
+    ? others.filter(
+        ([, prof]) =>
+          prof.displayName.toLowerCase().includes(query.toLowerCase()) ||
+          prof.location?.toLowerCase().includes(query.toLowerCase()),
+      )
+    : others;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="new-chat-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={onClose}
+          />
+          <motion.div
+            key="new-chat-sheet"
+            data-ocid="messages.sheet"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            className="fixed inset-x-0 bottom-0 z-50 bg-[#1a1a2e] rounded-t-3xl overflow-hidden flex flex-col"
+            style={{ maxHeight: "80dvh" }}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pb-3 shrink-0">
+              <h3 className="text-white font-bold text-lg">New Message</h3>
+              <button
+                type="button"
+                data-ocid="messages.close_button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
+            </div>
+            {/* Search */}
+            <div className="px-4 pb-3 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                <input
+                  data-ocid="messages.search_input"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search people..."
+                  className="w-full bg-white/8 border border-white/10 text-white placeholder:text-white/30 h-10 rounded-xl pl-9 pr-4 text-sm outline-none focus:border-pink-500/50"
+                />
+              </div>
+            </div>
+            {/* User list */}
+            <div className="flex-1 overflow-y-auto pb-6">
+              {filtered.length === 0 ? (
+                <div
+                  data-ocid="messages.empty_state"
+                  className="flex flex-col items-center justify-center py-10 gap-2"
+                >
+                  <p className="text-white/30 text-sm">No users found</p>
+                </div>
+              ) : (
+                filtered.map(([principal, profile], i) => (
+                  <button
+                    key={principal.toString()}
+                    type="button"
+                    data-ocid={`messages.item.${i + 1}`}
+                    onClick={() => onSelect({ principal, profile })}
+                    className="flex items-center gap-3 px-4 py-3 w-full hover:bg-white/5 transition-colors"
+                  >
+                    <Avatar className="w-11 h-11 shrink-0">
+                      {profile.avatar && (
+                        <AvatarImage src={profile.avatar.getDirectURL()} />
+                      )}
+                      <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white font-bold">
+                        {profile.displayName[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col text-left">
+                      <p className="text-white font-semibold text-sm">
+                        {profile.displayName}
+                      </p>
+                      {profile.location && (
+                        <p className="text-white/40 text-xs">
+                          📍 {profile.location}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function ConversationView({
   otherUser,
   otherProfile,
@@ -315,6 +564,20 @@ function ConversationView({
 }) {
   const [text, setText] = useState("");
   const [activeCall, setActiveCall] = useState<"voice" | "video" | null>(null);
+  const [outgoingCall, setOutgoingCall] = useState<"voice" | "video" | null>(
+    null,
+  );
+  const [incomingCallMode, setIncomingCallMode] = useState<
+    "voice" | "video" | null
+  >(null);
+
+  const handleInitCall = (mode: "voice" | "video") => {
+    setOutgoingCall(mode);
+    setTimeout(() => {
+      setOutgoingCall(null);
+      setIncomingCallMode(mode);
+    }, 2000);
+  };
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [contextMenu, setContextMenu] = useState<{
     msgIndex: number;
@@ -323,20 +586,20 @@ function ConversationView({
   } | null>(null);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [chatTheme, setChatTheme] = useState(CHAT_THEMES[0]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [filePreview, setFilePreview] = useState<{
+    url: string;
+    name: string;
+    type: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
   const { data: messages, isLoading } = useGetMessages(otherUser);
   const sendMessage = useSendMessage();
   const formatTs = useFormatTimestamp();
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!text.trim()) return;
-    try {
-      await sendMessage.mutateAsync({ to: otherUser, content: text.trim() });
-      setText("");
-    } catch {}
-  };
+  // handleSend replaced by handleSendWithFile
 
   const handleLongPress = (e: React.MouseEvent, msgIndex: number) => {
     e.preventDefault();
@@ -349,6 +612,28 @@ function ConversationView({
       return [...filtered, { emoji, msgIndex }];
     });
     setContextMenu(null);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setFilePreview({ url, name: file.name, type: file.type });
+  };
+
+  const handleSendWithFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() && !filePreview) return;
+    try {
+      const content =
+        text.trim() || (filePreview ? `📎 ${filePreview.name}` : "");
+      await sendMessage.mutateAsync({ to: otherUser, content });
+      setText("");
+      if (filePreview) {
+        URL.revokeObjectURL(filePreview.url);
+        setFilePreview(null);
+      }
+    } catch {}
   };
 
   const quickReplies = [
@@ -466,7 +751,7 @@ function ConversationView({
         <button
           type="button"
           data-ocid="messages.secondary_button"
-          onClick={() => setActiveCall("voice")}
+          onClick={() => handleInitCall("voice")}
           className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
           title="Voice call"
         >
@@ -475,7 +760,7 @@ function ConversationView({
         <button
           type="button"
           data-ocid="messages.toggle"
-          onClick={() => setActiveCall("video")}
+          onClick={() => handleInitCall("video")}
           className="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center"
           title="Video call"
         >
@@ -608,6 +893,62 @@ function ConversationView({
         )}
       </AnimatePresence>
 
+      {/* File preview */}
+      {filePreview && (
+        <div className="px-3 py-2 shrink-0 border-t border-white/5">
+          <div className="relative inline-block">
+            {filePreview.type.startsWith("video/") ? (
+              <video
+                src={filePreview.url}
+                className="h-20 rounded-xl object-cover"
+                controls
+              >
+                <track kind="captions" />
+              </video>
+            ) : (
+              <img
+                src={filePreview.url}
+                alt="preview"
+                className="h-20 rounded-xl object-cover"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                URL.revokeObjectURL(filePreview.url);
+                setFilePreview(null);
+              }}
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"
+            >
+              <X className="w-3 h-3 text-white" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Emoji picker panel */}
+      {showEmojiPicker && (
+        <div
+          className="shrink-0 border-t border-white/5 bg-[#0f0f1a] px-3 py-3"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <div className="grid grid-cols-10 gap-1 max-h-32 overflow-y-auto no-scrollbar">
+            {EMOJI_LIST.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => setText((t) => t + emoji)}
+                className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/10 rounded-lg transition-colors active:scale-90"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Vanish mode hint */}
       <div className="flex items-center justify-center gap-2 py-1.5 shrink-0">
         <div className="w-3 h-3 rounded-full border border-white/20 animate-spin border-t-transparent" />
@@ -618,7 +959,7 @@ function ConversationView({
 
       {/* Input bar */}
       <form
-        onSubmit={handleSend}
+        onSubmit={handleSendWithFile}
         className="flex items-center gap-2 px-3 py-2 border-t border-white/5 shrink-0 pb-[calc(0.5rem+env(safe-area-inset-bottom,64px))]"
       >
         <button
@@ -635,10 +976,18 @@ function ConversationView({
         </button>
         <button
           type="button"
-          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0 active:text-purple-400 transition-colors"
         >
           <Image className="w-5 h-5" />
         </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
         <button
           type="button"
           className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0"
@@ -656,7 +1005,11 @@ function ConversationView({
         </div>
         <button
           type="button"
-          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowEmojiPicker((v) => !v);
+          }}
+          className={`w-8 h-8 flex items-center justify-center shrink-0 transition-colors ${showEmojiPicker ? "text-purple-400" : "text-white/40"}`}
         >
           <SmilePlus className="w-5 h-5" />
         </button>
@@ -691,13 +1044,36 @@ function ConversationView({
         )}
       </form>
 
-      {/* Call overlay */}
+      {/* Call overlays */}
       <AnimatePresence>
         {activeCall && (
           <CallScreen
             mode={activeCall}
             otherProfile={otherProfile}
             onEnd={() => setActiveCall(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {outgoingCall && (
+          <OutgoingCallOverlay
+            profile={otherProfile}
+            mode={outgoingCall}
+            onCancel={() => setOutgoingCall(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {incomingCallMode && (
+          <IncomingCallOverlay
+            profile={otherProfile}
+            mode={incomingCallMode}
+            onAccept={() => {
+              const m = incomingCallMode;
+              setIncomingCallMode(null);
+              setActiveCall(m);
+            }}
+            onReject={() => setIncomingCallMode(null)}
           />
         )}
       </AnimatePresence>

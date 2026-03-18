@@ -2,16 +2,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
-import { Heart, Search, Star, X, Zap } from "lucide-react";
+import { Heart, Search, Star, X } from "lucide-react";
 import {
   AnimatePresence,
   motion,
   useMotionValue,
   useTransform,
 } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { Profile } from "../../backend";
+import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import {
+  useGetAllProfiles,
+  useGetCallerProfile,
+  useGetStories,
   useGetTinderQueue,
   useTinderLike,
   useTinderPass,
@@ -54,6 +58,107 @@ function ConfettiPiece({ color, index }: { color: string; index: number }) {
   );
 }
 
+function StoryRing({ count, size = 56 }: { count: number; size?: number }) {
+  const r = (size - 4) / 2;
+  const circumference = 2 * Math.PI * r;
+  const gap = count > 1 ? 3 : 0;
+  const segmentLength = (circumference - gap * count) / count;
+  return (
+    <svg
+      width={size}
+      height={size}
+      className="absolute inset-0"
+      aria-label="Story ring"
+      role="img"
+      style={{ transform: "rotate(-90deg)" }}
+    >
+      {Array.from({ length: count }).map((_, i) => {
+        const offset = i * (segmentLength + gap);
+        return (
+          <circle
+            key={`seg-${offset.toFixed(2)}`}
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="url(#storyGrad)"
+            strokeWidth={2.5}
+            strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}
+            strokeDashoffset={-offset}
+            strokeLinecap="round"
+          />
+        );
+      })}
+      <defs>
+        <linearGradient id="storyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ec4899" />
+          <stop offset="100%" stopColor="#a855f7" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function StoryRingAvatar({
+  principal,
+  profile,
+  onClick,
+}: {
+  principal: Principal;
+  profile: Profile;
+  onClick?: () => void;
+}) {
+  const { data: stories } = useGetStories(principal);
+  const count = stories?.length ?? 0;
+  if (count === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center gap-1 shrink-0 active:scale-95 transition-transform"
+    >
+      <div className="relative w-14 h-14">
+        <StoryRing count={count} size={56} />
+        <div className="absolute inset-[3px] rounded-full overflow-hidden">
+          {profile.avatar ? (
+            <img
+              src={profile.avatar.getDirectURL()}
+              alt={profile.displayName}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Avatar className="w-full h-full">
+              <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm font-bold">
+                {profile.displayName[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+      </div>
+      <span className="text-white/50 text-[10px] w-14 text-center truncate">
+        {profile.displayName}
+      </span>
+    </button>
+  );
+}
+
+const playLikeSound = () => {
+  try {
+    const ctx = new (
+      window.AudioContext || (window as any).webkitAudioContext
+    )();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+};
+
 interface Props {
   onUserClick: (p: Principal) => void;
   onNotifOpen?: () => void;
@@ -63,31 +168,19 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
   const [showLive, setShowLive] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
-  const [boostActive, setBoostActive] = useState(false);
-  const [boostCountdown, setBoostCountdown] = useState(0);
-  const boostTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { identity } = useInternetIdentity();
+  const myPrincipal = identity?.getPrincipal() ?? null;
+  const { data: callerProfile } = useGetCallerProfile();
+  const { data: myStories } = useGetStories(myPrincipal);
+  const { data: allProfiles } = useGetAllProfiles();
 
-  const handleBoost = () => {
-    if (boostActive) return;
-    setBoostActive(true);
-    setBoostCountdown(30);
-    boostTimerRef.current = setInterval(() => {
-      setBoostCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(boostTimerRef.current!);
-          setBoostActive(false);
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-  };
+  const myStoryCount = myStories?.length ?? 0;
 
-  useEffect(() => {
-    return () => {
-      if (boostTimerRef.current) clearInterval(boostTimerRef.current);
-    };
-  }, []);
+  // Other users with stories (up to 6)
+  const otherUsersWithStories =
+    allProfiles
+      ?.filter(([p]) => p.toString() !== myPrincipal?.toString())
+      .slice(0, 6) ?? [];
 
   if (showLive) {
     return <LiveBroadcastScreen onBack={() => setShowLive(false)} />;
@@ -110,106 +203,108 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
       data-ocid="discover.page"
       className="flex flex-col h-full bg-[#0a0a0f]"
     >
-      {/* Inline Header with logo + search + heart */}
+      {/* Single-row header */}
       <div
         className="shrink-0 flex items-center justify-between px-4 bg-[#0a0a0f] border-b border-white/5"
-        style={{ height: 48 }}
+        style={{ height: 56 }}
       >
-        <span
-          className="font-display font-bold text-lg"
-          style={{
-            background: "linear-gradient(90deg, #ec4899 0%, #a855f7 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          Social Fusion
+        <span className="discover-title text-2xl font-bold tracking-tight select-none">
+          Discover
         </span>
         <div className="flex items-center gap-2">
           <button
             type="button"
+            data-ocid="discover.search_input"
             onClick={() => setShowSearch(true)}
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+            className="w-9 h-9 rounded-full bg-white/8 border border-white/10 flex items-center justify-center active:scale-95 transition-transform"
           >
             <Search className="w-4 h-4 text-white/70" />
           </button>
           <button
             type="button"
+            data-ocid="discover.primary_button"
+            onClick={() => setShowLive(true)}
+            className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-bold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+          >
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            LIVE
+          </button>
+          <button
+            type="button"
+            data-ocid="discover.toggle"
             onClick={() => onNotifOpen?.()}
-            className="w-9 h-9 rounded-full bg-pink-500/15 flex items-center justify-center relative"
+            className="w-9 h-9 rounded-full bg-pink-500/15 border border-pink-500/20 flex items-center justify-center active:scale-95 transition-transform relative"
           >
             <Heart className="w-4 h-4 text-pink-400" />
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-pink-500" />
           </button>
         </div>
       </div>
 
-      {/* Header */}
-      <div className="px-4 pt-3 pb-3 shrink-0">
-        <div className="flex items-center justify-between">
-          <div />
-          <div className="flex items-center gap-2">
-            {/* Boost button */}
-            <button
-              type="button"
-              data-ocid="discover.toggle"
-              onClick={handleBoost}
-              className={`relative flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-all ${
-                boostActive
-                  ? "bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg shadow-purple-500/40 ring-2 ring-purple-400/50 animate-pulse"
-                  : "bg-purple-600/20 border border-purple-500/40 text-purple-300"
-              }`}
-            >
-              <Zap className="w-3 h-3" />
-              {boostActive ? (
-                <span className="tabular-nums">{boostCountdown}s</span>
-              ) : (
-                "Boost"
-              )}
-            </button>
-
-            {/* LIVE button */}
-            <button
-              type="button"
-              data-ocid="discover.primary_button"
-              onClick={() => setShowLive(true)}
-              className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold px-3 py-1.5 rounded-full"
-            >
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              LIVE
-            </button>
-
-            <button
-              type="button"
-              data-ocid="discover.search_input"
-              onClick={() => setShowSearch(true)}
-              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-            >
-              <Search className="w-4 h-4 text-white/70" />
-            </button>
-          </div>
-        </div>
-
-        {/* Story row */}
-        <div className="flex items-center gap-3 mt-3 overflow-x-auto no-scrollbar pb-1">
+      {/* Story row */}
+      <div className="px-4 pt-3 pb-2 shrink-0">
+        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
+          {/* My story / add story button */}
           <div className="flex flex-col items-center gap-1 shrink-0">
             <button
               type="button"
               data-ocid="discover.upload_button"
               onClick={() => setStoryCreatorOpen(true)}
-              className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/50 flex items-center justify-center bg-pink-500/10 active:scale-95 transition-transform"
+              className="relative w-14 h-14 rounded-full active:scale-95 transition-transform"
             >
-              <span className="text-pink-400 text-2xl font-light leading-none">
-                +
-              </span>
+              {myStoryCount > 0 ? (
+                <>
+                  <StoryRing count={myStoryCount} size={56} />
+                  <div className="absolute inset-[3px] rounded-full overflow-hidden">
+                    {callerProfile?.avatar ? (
+                      <img
+                        src={callerProfile.avatar.getDirectURL()}
+                        alt="My story"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
+                        <span className="text-white text-xl font-bold">
+                          {callerProfile?.displayName?.[0]?.toUpperCase() ??
+                            "+"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-pink-500 border-2 border-[#0a0a0f] flex items-center justify-center">
+                    <span className="text-white text-xs font-bold leading-none">
+                      +
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/50 flex items-center justify-center bg-pink-500/10">
+                  <span className="text-pink-400 text-2xl font-light leading-none">
+                    +
+                  </span>
+                </div>
+              )}
             </button>
-            <span className="text-white/50 text-[10px]">Your story</span>
+            <span className="text-white/50 text-[10px]">
+              {myStoryCount > 0 ? "Your story" : "Add story"}
+            </span>
           </div>
+
+          {/* Other users' stories */}
+          {otherUsersWithStories.map(([p, prof]) => (
+            <StoryRingAvatar
+              key={p.toString()}
+              principal={p}
+              profile={prof}
+              onClick={() => onUserClick(p)}
+            />
+          ))}
         </div>
       </div>
 
       {/* Swipe section */}
       <div className="flex-1 overflow-hidden">
-        <TinderSection />
+        <TinderSection onUserClick={onUserClick} onLikeSound={playLikeSound} />
       </div>
 
       <StoryCreatorSheet
@@ -220,8 +315,14 @@ export default function DiscoverTab({ onUserClick, onNotifOpen }: Props) {
   );
 }
 
-function TinderSection() {
+function TinderSection({
+  onUserClick,
+  onLikeSound,
+}: { onUserClick: (p: Principal) => void; onLikeSound: () => void }) {
   const { data: queue, isLoading } = useGetTinderQueue();
+  const { data: allProfiles } = useGetAllProfiles();
+  const { identity } = useInternetIdentity();
+  const myPrincipal = identity?.getPrincipal();
   const _tinderLike = useTinderLike();
   const _tinderPass = useTinderPass();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -229,14 +330,27 @@ function TinderSection() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [lastMatchName, setLastMatchName] = useState("");
 
-  const profiles = queue ?? [];
-  const current = profiles[currentIndex];
+  // Use queue profiles if available, otherwise fall back to allProfiles excluding self
+  const profiles =
+    queue && queue.length > 0
+      ? queue
+      : (allProfiles
+          ?.filter(([p]) => p.toString() !== myPrincipal?.toString())
+          .map(([, prof]) => prof) ?? []);
+  const currentProfile = profiles[currentIndex] ?? null;
+
+  // Find principal for current profile from allProfiles
+  const currentPrincipal =
+    allProfiles?.find(
+      ([, prof]) => prof.displayName === currentProfile?.displayName,
+    )?.[0] ?? null;
 
   const handleLike = async () => {
-    if (!current) return;
+    if (!currentProfile) return;
+    onLikeSound();
     try {
-      await _tinderLike.mutateAsync(current.avatar as never);
-      setLastMatchName(current.displayName);
+      if (currentPrincipal) await _tinderLike.mutateAsync(currentPrincipal);
+      setLastMatchName(currentProfile.displayName);
       setShowMatch(true);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 1600);
@@ -245,9 +359,9 @@ function TinderSection() {
   };
 
   const handlePass = async () => {
-    if (!current) return;
+    if (!currentProfile) return;
     try {
-      await _tinderPass.mutateAsync(current.avatar as never);
+      if (currentPrincipal) await _tinderPass.mutateAsync(currentPrincipal);
     } catch {}
     setCurrentIndex((i) => i + 1);
   };
@@ -265,7 +379,7 @@ function TinderSection() {
     );
   }
 
-  if (!current) {
+  if (!currentProfile) {
     return (
       <div
         data-ocid="discover.empty_state"
@@ -291,7 +405,6 @@ function TinderSection() {
             exit={{ opacity: 0, scale: 0.8 }}
             className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 rounded-3xl overflow-hidden"
           >
-            {/* Confetti */}
             {showConfetti &&
               CONFETTI_PIECES.map((piece) => (
                 <ConfettiPiece
@@ -319,7 +432,12 @@ function TinderSection() {
         )}
       </AnimatePresence>
 
-      <SwipeCard profile={current} onLike={handleLike} onPass={handlePass} />
+      <SwipeCard
+        profile={currentProfile}
+        onLike={handleLike}
+        onPass={handlePass}
+        onTap={() => currentPrincipal && onUserClick(currentPrincipal)}
+      />
     </div>
   );
 }
@@ -328,19 +446,47 @@ function SwipeCard({
   profile,
   onLike,
   onPass,
-}: { profile: Profile; onLike: () => void; onPass: () => void }) {
+  onTap,
+}: {
+  profile: Profile;
+  onLike: () => void;
+  onPass: () => void;
+  onTap: () => void;
+}) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-150, 150], [-18, 18]);
   const opacity = useTransform(x, [-150, -80, 0, 80, 150], [0, 1, 1, 1, 0]);
   const likeOpacity = useTransform(x, [20, 80], [0, 1]);
   const nopeOpacity = useTransform(x, [-80, -20], [1, 0]);
+  const isDragging = useRef(false);
 
+  const handleDragStart = () => {
+    isDragging.current = true;
+  };
   const handleDragEnd = (_: unknown, info: { offset: { x: number } }) => {
+    setTimeout(() => {
+      isDragging.current = false;
+    }, 50);
     if (info.offset.x > 100) onLike();
     else if (info.offset.x < -100) onPass();
   };
 
-  const handleSuperlike = () => {
+  const handleCardTap = () => {
+    if (!isDragging.current) onTap();
+  };
+
+  const handleSuperlike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onLike();
+  };
+
+  const handlePassClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onPass();
+  };
+
+  const handleLikeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onLike();
   };
 
@@ -350,7 +496,9 @@ function SwipeCard({
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         style={{ x, rotate, opacity }}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onClick={handleCardTap}
         className="w-full cursor-grab active:cursor-grabbing"
         data-ocid="discover.card"
       >
@@ -367,7 +515,6 @@ function SwipeCard({
             </div>
           )}
 
-          {/* Like/Nope overlays */}
           <motion.div
             style={{ opacity: likeOpacity }}
             className="absolute top-8 left-6 rotate-[-15deg] border-4 border-green-400 rounded-lg px-3 py-1"
@@ -381,7 +528,10 @@ function SwipeCard({
             <span className="text-red-400 font-black text-2xl">NOPE</span>
           </motion.div>
 
-          {/* Info gradient */}
+          <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm rounded-full px-2 py-1">
+            <span className="text-white/60 text-[10px]">Tap for profile</span>
+          </div>
+
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4">
             <h3 className="text-white font-bold text-xl">
               {profile.displayName}
@@ -400,17 +550,14 @@ function SwipeCard({
 
       {/* Action buttons */}
       <div className="flex items-center gap-5 mt-4">
-        {/* Pass */}
         <button
           type="button"
           data-ocid="discover.delete_button"
-          onClick={onPass}
+          onClick={handlePassClick}
           className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center shadow-lg active:scale-95 transition-transform"
         >
           <X className="w-6 h-6 text-white" />
         </button>
-
-        {/* Superlike (center-ish) */}
         <button
           type="button"
           data-ocid="discover.secondary_button"
@@ -419,12 +566,10 @@ function SwipeCard({
         >
           <Star className="w-6 h-6 text-white fill-white" />
         </button>
-
-        {/* Like */}
         <button
           type="button"
           data-ocid="discover.toggle"
-          onClick={onLike}
+          onClick={handleLikeClick}
           className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30 active:scale-95 transition-transform"
         >
           <Heart className="w-7 h-7 text-white" />

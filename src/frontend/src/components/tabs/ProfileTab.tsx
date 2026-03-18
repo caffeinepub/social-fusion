@@ -25,6 +25,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Edit2,
   Gift,
   Grid,
@@ -38,7 +40,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { ExternalBlob } from "../../backend";
 import type { Profile } from "../../backend";
@@ -48,8 +50,12 @@ import {
   useGetFollowers,
   useGetFollowing,
   useGetPostsByUser,
+  useGetStories,
+  useGetStoryHighlights,
+  useSaveStoryToHighlight,
   useUpdateProfile,
 } from "../../hooks/useQueries";
+import FollowListSheet from "../FollowListSheet";
 import GiftSheet from "../GiftSheet";
 
 const MOODS = ["😊", "🎉", "❤️", "🔥", "😴"];
@@ -85,8 +91,12 @@ export default function ProfileTab() {
   const { data: following } = useGetFollowing(myPrincipal);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
+  const [followSheet, setFollowSheet] = useState<
+    "followers" | "following" | null
+  >(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [profileStrength, setProfileStrength] = useState(0);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   // Privacy toggles
   const [isPublic, setIsPublic] = useState(true);
@@ -143,6 +153,13 @@ export default function ProfileTab() {
     >
       {/* Gradient header */}
       <div className="relative h-48 bg-gradient-to-br from-[#3d0000] via-[#2d0050] to-[#1a0030] shrink-0 overflow-hidden">
+        {profile?.coverPhoto && (
+          <img
+            src={profile.coverPhoto.getDirectURL()}
+            alt="Cover"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
         <div
           className="absolute inset-0 opacity-20"
           style={{
@@ -179,8 +196,8 @@ export default function ProfileTab() {
         </div>
 
         {/* Avatar overlapping */}
-        <div className="absolute -bottom-10 left-4 flex items-end gap-3">
-          <div className="relative">
+        <div className="absolute -bottom-10 left-4 flex items-end gap-3 z-20">
+          <div className="relative z-20">
             <Avatar className="w-20 h-20 ring-4 ring-[#0a0a0f]">
               {profile?.avatar && (
                 <AvatarImage src={profile.avatar.getDirectURL()} />
@@ -230,7 +247,7 @@ export default function ProfileTab() {
         </div>
 
         {/* Extended profile info display */}
-        <ExtendedProfileInfo />
+        <ExtendedProfileInfo profile={profile ?? null} />
 
         {/* Mood picker */}
         <div className="flex items-center gap-2 mt-3">
@@ -255,19 +272,38 @@ export default function ProfileTab() {
         {/* Stats */}
         <div className="flex gap-0 mt-4 border border-white/10 rounded-2xl overflow-hidden">
           {[
-            { label: "Posts", value: posts?.length ?? 0 },
-            { label: "Followers", value: followers?.length ?? 0 },
-            { label: "Following", value: following?.length ?? 0 },
-          ].map(({ label, value }, i) => (
-            <div
+            { label: "Posts", value: posts?.length ?? 0, clickable: false },
+            {
+              label: "Followers",
+              value: followers?.length ?? 0,
+              clickable: true,
+            },
+            {
+              label: "Following",
+              value: following?.length ?? 0,
+              clickable: true,
+            },
+          ].map(({ label, value, clickable }, i) => (
+            <button
               key={label}
+              type="button"
+              disabled={!clickable}
+              data-ocid={
+                clickable ? `profile.${label.toLowerCase()}_button` : undefined
+              }
+              onClick={() =>
+                clickable &&
+                setFollowSheet(
+                  label === "Followers" ? "followers" : "following",
+                )
+              }
               className={`flex-1 flex flex-col items-center py-3 ${
                 i < 2 ? "border-r border-white/10" : ""
-              }`}
+              } ${clickable ? "active:bg-white/5 transition-colors" : ""}`}
             >
               <span className="text-white font-bold text-lg">{value}</span>
               <span className="text-white/40 text-xs">{label}</span>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -305,6 +341,9 @@ export default function ProfileTab() {
             </p>
           )}
         </div>
+
+        {/* Story Highlights */}
+        <StoryHighlightsSection myPrincipal={myPrincipal} />
 
         {/* Action buttons row */}
         <div className="flex gap-2 mt-4">
@@ -440,9 +479,11 @@ export default function ProfileTab() {
             {posts && posts.length > 0 ? (
               <div className="grid grid-cols-3 gap-0.5">
                 {posts.map((post, i) => (
-                  <div
+                  <button
                     key={post.id.toString()}
+                    type="button"
                     data-ocid={`profile.item.${i + 1}`}
+                    onClick={() => setLightboxIdx(i)}
                     className="aspect-square bg-muted overflow-hidden"
                   >
                     {post.image ? (
@@ -459,7 +500,7 @@ export default function ProfileTab() {
                         </p>
                       </div>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -491,11 +532,80 @@ export default function ProfileTab() {
         </Tabs>
       </div>
 
+      {/* Lightbox */}
+      <AnimatePresence>
+        {lightboxIdx !== null && posts && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxIdx(null)}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+            {lightboxIdx > 0 && (
+              <button
+                type="button"
+                onClick={() => setLightboxIdx((i) => Math.max(0, (i ?? 0) - 1))}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10"
+              >
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            {lightboxIdx < posts.length - 1 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setLightboxIdx((i) =>
+                    Math.min(posts.length - 1, (i ?? 0) + 1),
+                  )
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10"
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            )}
+            {posts[lightboxIdx]?.image && (
+              <img
+                src={posts[lightboxIdx].image!.getDirectURL()}
+                alt="Post"
+                className="max-w-full max-h-full object-contain"
+              />
+            )}
+            {!posts[lightboxIdx]?.image && (
+              <p className="text-white text-center px-8">
+                {posts[lightboxIdx]?.content}
+              </p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <GiftSheet
         open={giftOpen}
         onClose={() => setGiftOpen(false)}
         recipientName={profile?.displayName ?? "yourself"}
       />
+
+      {/* Follow/Followers sheet */}
+      <AnimatePresence>
+        {followSheet && myPrincipal && (
+          <FollowListSheet
+            type={followSheet}
+            principals={
+              followSheet === "followers"
+                ? (followers ?? [])
+                : (following ?? [])
+            }
+            onClose={() => setFollowSheet(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -519,13 +629,36 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const updateProfile = useUpdateProfile();
   const [extForm, setExtForm] = useState({
-    interests: "",
-    hobbies: "",
-    favMovies: "",
-    favSongs: "",
-    education: "",
-    thoughts: "",
+    interests: profile?.interests || "",
+    hobbies: profile?.hobbies || "",
+    favMovies: profile?.favMovies || "",
+    favSongs: profile?.favSongs || "",
+    education: profile?.education || "",
+    thoughts: profile?.thoughts || "",
   });
+
+  // Sync form fields whenever the dialog opens or profile data arrives
+  useEffect(() => {
+    if (open && profile) {
+      setForm({
+        displayName: profile.displayName || "",
+        bio: profile.bio || "",
+        location: profile.location || "",
+        website: profile.website || "",
+        birthday: profile.birthday || "",
+        gender: profile.gender || "",
+        relationshipStatus: profile.relationshipStatus || "",
+      });
+      setExtForm({
+        interests: profile.interests || "",
+        hobbies: profile.hobbies || "",
+        favMovies: profile.favMovies || "",
+        favSongs: profile.favSongs || "",
+        education: profile.education || "",
+        thoughts: profile.thoughts || "",
+      });
+    }
+  }, [open, profile]);
 
   const handleAddCover = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -557,9 +690,21 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
         const bytes = new Uint8Array(await imageFiles[0].arrayBuffer());
         avatarBlob = ExternalBlob.fromBytes(bytes);
       }
+      let coverBlob: ExternalBlob | undefined;
+      if (_coverFile) {
+        const bytes = new Uint8Array(await _coverFile.arrayBuffer());
+        coverBlob = ExternalBlob.fromBytes(bytes);
+      }
       await updateProfile.mutateAsync({
         ...form,
+        interests: extForm.interests,
+        hobbies: extForm.hobbies,
+        favMovies: extForm.favMovies,
+        favSongs: extForm.favSongs,
+        education: extForm.education,
+        thoughts: extForm.thoughts,
         avatar: avatarBlob ?? profile?.avatar ?? undefined,
+        coverPhoto: coverBlob ?? profile?.coverPhoto ?? undefined,
       } as Profile);
       setOpen(false);
     } catch {}
@@ -878,49 +1023,16 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
   );
 }
 
-// ─── Extended Profile Info (local state demo) ──────────────────────────────
-const extProfileStore = {
-  interests: "",
-  hobbies: "",
-  favMovies: "",
-  favSongs: "",
-  education: "",
-  thoughts: "",
-};
-
-function ExtendedProfileInfo() {
+// ─── Extended Profile Info (reads from backend profile) ─────────────────────
+function ExtendedProfileInfo({ profile }: { profile: Profile | null }) {
   const items = [
-    {
-      icon: "🎯",
-      label: "Interests",
-      value: extProfileStore.interests || "Not set",
-    },
-    {
-      icon: "🎮",
-      label: "Hobbies",
-      value: extProfileStore.hobbies || "Not set",
-    },
-    {
-      icon: "🎬",
-      label: "Favourite Movies",
-      value: extProfileStore.favMovies || "Not set",
-    },
-    {
-      icon: "🎵",
-      label: "Favourite Songs",
-      value: extProfileStore.favSongs || "Not set",
-    },
-    {
-      icon: "🎓",
-      label: "Education",
-      value: extProfileStore.education || "Not set",
-    },
-    {
-      icon: "💭",
-      label: "Thinking About",
-      value: extProfileStore.thoughts || "Not set",
-    },
-  ].filter((item) => item.value !== "Not set");
+    { icon: "🎯", label: "Interests", value: profile?.interests || "" },
+    { icon: "🎮", label: "Hobbies", value: profile?.hobbies || "" },
+    { icon: "🎬", label: "Favourite Movies", value: profile?.favMovies || "" },
+    { icon: "🎵", label: "Favourite Songs", value: profile?.favSongs || "" },
+    { icon: "🎓", label: "Education", value: profile?.education || "" },
+    { icon: "💭", label: "Thoughts", value: profile?.thoughts || "" },
+  ].filter((item) => item.value.trim().length > 0);
 
   if (items.length === 0) return null;
 
@@ -940,6 +1052,126 @@ function ExtendedProfileInfo() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Story Highlights Section ────────────────────────────────────────────────
+function StoryHighlightsSection({
+  myPrincipal,
+}: {
+  myPrincipal: import("@icp-sdk/core/principal").Principal | null;
+}) {
+  const { data: highlights } = useGetStoryHighlights(myPrincipal);
+  const { data: stories } = useGetStories(myPrincipal);
+  const saveHighlight = useSaveStoryToHighlight();
+  const [showStoryPicker, setShowStoryPicker] = useState(false);
+
+  const handleSaveHighlight = async (idx: number) => {
+    try {
+      await saveHighlight.mutateAsync(BigInt(idx));
+      setShowStoryPicker(false);
+    } catch {}
+  };
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-white/50 text-xs font-semibold uppercase tracking-widest">
+          Highlights
+        </h3>
+      </div>
+      <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
+        {/* Add highlight button */}
+        <button
+          type="button"
+          data-ocid="profile.upload_button"
+          onClick={() => setShowStoryPicker(true)}
+          className="flex flex-col items-center gap-1.5 shrink-0"
+        >
+          <div className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/40 bg-pink-500/8 flex items-center justify-center">
+            <Plus className="w-5 h-5 text-pink-400" />
+          </div>
+          <span className="text-white/30 text-[10px]">Add</span>
+        </button>
+
+        {/* Existing highlights */}
+        {highlights && highlights.length > 0 ? (
+          highlights.map((story, i) => (
+            <div
+              key={story.timestamp.toString()}
+              data-ocid={`profile.item.${i + 1}`}
+              className="flex flex-col items-center gap-1.5 shrink-0"
+            >
+              <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-pink-500/60 bg-gradient-to-br from-pink-500/30 to-purple-600/30 flex items-center justify-center">
+                {story.image ? (
+                  <img
+                    src={story.image.getDirectURL()}
+                    alt="Highlight"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-lg">✨</span>
+                )}
+              </div>
+              <span className="text-white/40 text-[10px] max-w-[56px] truncate">
+                {story.content || `Story ${i + 1}`}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="text-white/20 text-xs py-2">No highlights yet</p>
+        )}
+      </div>
+
+      {/* Story picker modal */}
+      {showStoryPicker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a2e] rounded-t-3xl w-full max-w-sm p-4 pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-white font-bold">Save Story to Highlights</h4>
+              <button
+                type="button"
+                onClick={() => setShowStoryPicker(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
+            </div>
+            {stories && stories.length > 0 ? (
+              <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                {stories.map((story, idx) => (
+                  <button
+                    key={`${story.timestamp.toString()}-${idx}`}
+                    type="button"
+                    onClick={() => handleSaveHighlight(idx)}
+                    className="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+                  >
+                    {story.image ? (
+                      <img
+                        src={story.image.getDirectURL()}
+                        alt="Story"
+                        className="w-10 h-10 rounded-xl object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500/30 to-purple-600/30 flex items-center justify-center shrink-0">
+                        <span className="text-lg">✨</span>
+                      </div>
+                    )}
+                    <p className="text-white/70 text-sm flex-1 text-left truncate">
+                      {story.content || "Story"}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-white/30 text-sm text-center py-6">
+                No stories to highlight
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

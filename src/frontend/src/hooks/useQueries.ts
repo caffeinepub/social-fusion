@@ -21,7 +21,7 @@ export function useGetCallerProfile() {
       return actor.getCallerUserProfile();
     },
     enabled: !!actor && !actorFetching,
-    retry: false,
+    refetchOnWindowFocus: true,
   });
   return {
     ...query,
@@ -52,6 +52,8 @@ export function useGetAllProfiles() {
       return actor.getAllProfiles();
     },
     enabled: !!actor && !isFetching,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -114,7 +116,9 @@ export function useGetMessages(otherUser: Principal | null) {
       return msgs.sort((a, b) => Number(a.timestamp - b.timestamp));
     },
     enabled: !!actor && !isFetching && !!otherUser,
-    refetchInterval: 5000,
+    refetchInterval: 2000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
@@ -152,7 +156,9 @@ export function useGetNotifications() {
       return actor.getNotifications();
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 15000,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
@@ -184,7 +190,7 @@ export function useMarkNotificationsRead() {
   });
 }
 
-// Tinder
+// Tinder queue returns Profile[] (no principals from backend)
 export function useGetTinderQueue() {
   const { actor, isFetching } = useActor();
   return useQuery<Profile[]>({
@@ -234,6 +240,71 @@ export function useTinderPass() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tinderQueue"] });
+    },
+  });
+}
+
+// Friends
+export function useGetFriends() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Principal[]>({
+    queryKey: ["friends"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getFriends();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useAcceptRequest() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (user: Principal) => {
+      if (!actor) throw new Error("Actor not available");
+      await actor.acceptRequest(user);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["matches"] });
+      qc.invalidateQueries({ queryKey: ["friends"] });
+      qc.invalidateQueries({ queryKey: ["allProfiles"] });
+    },
+  });
+}
+
+export function useStarUser() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (user: Principal) => {
+      if (!actor) throw new Error("Actor not available");
+      await actor.starUser(user);
+    },
+  });
+}
+
+export function useGetStoryHighlights(principal: Principal | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Story[]>({
+    queryKey: ["storyHighlights", principal?.toString()],
+    queryFn: async () => {
+      if (!actor || !principal) return [];
+      return actor.getStoryHighlights(principal);
+    },
+    enabled: !!actor && !isFetching && !!principal,
+  });
+}
+
+export function useSaveStoryToHighlight() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (storyIndex: bigint) => {
+      if (!actor) throw new Error("Actor not available");
+      await actor.saveStoryToHighlight(storyIndex);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["storyHighlights"] });
     },
   });
 }
@@ -380,7 +451,7 @@ export function useGetCallerProfileForAuth() {
       return actor.getCallerUserProfile();
     },
     enabled: !!actor && !actorFetching && !!identity,
-    retry: false,
+    refetchOnWindowFocus: true,
   });
   return {
     ...query,
@@ -394,25 +465,46 @@ export function usePrefetchAll() {
   const qc = useQueryClient();
   useEffect(() => {
     if (!actor || isFetching) return;
-    qc.prefetchQuery({
-      queryKey: ["tinderQueue"],
-      queryFn: () => actor.getTinderQueue(),
-    });
-    qc.prefetchQuery({
-      queryKey: ["allProfiles"],
-      queryFn: () => actor.getAllProfiles(),
-    });
-    qc.prefetchQuery({
-      queryKey: ["notifications"],
-      queryFn: () => actor.getNotifications(),
-    });
-    qc.prefetchQuery({
-      queryKey: ["matches"],
-      queryFn: () => actor.getMatches(),
-    });
-    qc.prefetchQuery({
-      queryKey: ["notificationCount"],
-      queryFn: () => actor.getUnreadNotificationCount(),
+    // Fetch all key data in parallel immediately
+    const opts = { staleTime: 0 };
+    Promise.all([
+      qc.fetchQuery({
+        queryKey: ["tinderQueue"],
+        queryFn: () => actor.getTinderQueue(),
+        ...opts,
+      }),
+      qc.fetchQuery({
+        queryKey: ["allProfiles"],
+        queryFn: () => actor.getAllProfiles(),
+        ...opts,
+      }),
+      qc.fetchQuery({
+        queryKey: ["notifications"],
+        queryFn: () => actor.getNotifications(),
+        ...opts,
+      }),
+      qc.fetchQuery({
+        queryKey: ["matches"],
+        queryFn: () => actor.getMatches(),
+        ...opts,
+      }),
+      qc.fetchQuery({
+        queryKey: ["notificationCount"],
+        queryFn: () => actor.getUnreadNotificationCount(),
+        ...opts,
+      }),
+      qc.fetchQuery({
+        queryKey: ["friends"],
+        queryFn: () => actor.getFriends(),
+        ...opts,
+      }),
+      qc.fetchQuery({
+        queryKey: ["callerProfile"],
+        queryFn: () => actor.getCallerUserProfile(),
+        ...opts,
+      }),
+    ]).catch(() => {
+      /* silent: individual query hooks will show errors */
     });
   }, [actor, isFetching, qc]);
 }

@@ -52,6 +52,12 @@ export default function ProfileSetup() {
         gender,
         birthday: birthday.trim(),
         relationshipStatus,
+        interests: "",
+        hobbies: "",
+        favMovies: "",
+        favSongs: "",
+        education: "",
+        thoughts: "",
       });
     } catch {}
   };

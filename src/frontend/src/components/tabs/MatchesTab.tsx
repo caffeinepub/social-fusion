@@ -12,7 +12,14 @@ interface Props {
 
 export default function MatchesTab({ onUserClick, onMessageUser }: Props) {
   const { data: matchPrincipals, isLoading } = useGetMatches();
-  const count = matchPrincipals?.length ?? 0;
+
+  // Deduplicate by principal string ID
+  const uniqueMatches = matchPrincipals
+    ? Array.from(
+        new Map(matchPrincipals.map((p) => [p.toString(), p])).values(),
+      )
+    : [];
+  const count = uniqueMatches.length;
 
   return (
     <div data-ocid="matches.page" className="flex flex-col h-full bg-[#0a0a0f]">
@@ -39,9 +46,9 @@ export default function MatchesTab({ onUserClick, onMessageUser }: Props) {
               </div>
             ))}
           </div>
-        ) : matchPrincipals && matchPrincipals.length > 0 ? (
+        ) : uniqueMatches.length > 0 ? (
           <div className="px-4 grid grid-cols-2 gap-3">
-            {matchPrincipals.map((principal, i) => (
+            {uniqueMatches.map((principal, i) => (
               <MatchCard
                 key={principal.toString()}
                 principal={principal}

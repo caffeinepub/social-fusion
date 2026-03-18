@@ -76,7 +76,7 @@ export default function SearchScreen({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search people..."
-            className="pl-9 bg-white/8 border-white/10 text-white placeholder:text-white/30 h-10 rounded-full"
+            className="pl-9 bg-[#1a1a2e] border border-white/20 text-white placeholder:text-white/40 h-10 rounded-full"
           />
           {query && (
             <button

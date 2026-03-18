@@ -34,6 +34,13 @@ actor {
     gender : Text;
     birthday : Text;
     relationshipStatus : Text;
+    interests : Text;
+    hobbies : Text;
+    favMovies : Text;
+    favSongs : Text;
+    education : Text;
+    thoughts : Text;
+    coverPhoto : ?ExternalBlob.ExternalBlob;
   };
 
   public type Message = {
@@ -121,12 +128,15 @@ actor {
   var following = Map.empty<Principal, Set.Set<Principal>>();
   var posts = Map.empty<Nat, Post>();
   var stories = Map.empty<Principal, List.List<Story>>();
+  var storyHighlights = Map.empty<Principal, List.List<Story>>();
   var messages = Map.empty<Principal, List.List<Message>>();
   var tinderLikes = List.empty<TinderLike>();
+  var friends = Map.empty<Principal, Set.Set<Principal>>();
   var notifications = Map.empty<Principal, List.List<Notification>>();
   var nextPostId = 0;
   var nextCommentId = 0;
   var nextNotificationId = 0;
+  var starsReceived = Map.empty<Principal, Set.Set<Principal>>();
 
   // Helper functions to check if user exists
   func assertUserExists(principal : Principal) {
@@ -396,6 +406,65 @@ actor {
     };
   };
 
+  // Friends/Matches
+  public shared ({ caller }) func acceptRequest(user : Principal) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can accept requests");
+    };
+    assertUserExists(user);
+    assertUserExists(caller);
+
+    // Verify that the user actually sent a tinder like to caller
+    let hasRequest = tinderLikes.toArray().find(
+      func(like) {
+        like.from == user and like.to == caller;
+      }
+    );
+
+    switch (hasRequest) {
+      case (null) {
+        Runtime.trap("No pending request from this user");
+      };
+      case (_) {
+        // Add each other as friends
+        let addFriend = func(map : Map.Map<Principal, Set.Set<Principal>>, key1 : Principal, key2 : Principal) {
+          switch (map.get(key1)) {
+            case (?friendsSet) {
+              friendsSet.add(key2);
+            };
+            case (null) {
+              let newFriends = Set.empty<Principal>();
+              newFriends.add(key2);
+              map.add(key1, newFriends);
+            };
+          };
+        };
+
+        addFriend(friends, caller, user);
+        addFriend(friends, user, caller);
+
+        // Create a mutual tinder like (caller likes user back)
+        let mutualLike : TinderLike = { from = caller; to = user };
+        tinderLikes.add(mutualLike);
+
+        addNotification(user, "friend_accept", caller, 0);
+        addNotification(caller, "friend_accept", user, 0);
+      };
+    };
+  };
+
+  public query ({ caller }) func getFriends() : async [Principal] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can get friends");
+    };
+    assertUserExists(caller);
+
+    switch (friends.get(caller)) {
+      case (?friendsSet) { friendsSet.toArray() };
+      case (null) { [] };
+    };
+  };
+
   // Stories
   public shared ({ caller }) func createStory(content : Text, image : ?ExternalBlob.ExternalBlob) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
@@ -435,6 +504,50 @@ actor {
           func(story) { Time.now() - story.timestamp < 24 * 60 * 60 * 1_000_000_000 }
         );
       };
+      case (null) { [] };
+    };
+  };
+
+  public shared ({ caller }) func saveStoryToHighlight(storyIndex : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save story highlights");
+    };
+    assertUserExists(caller);
+
+    switch (stories.get(caller)) {
+      case (?userStories) {
+        let userStoriesArray = userStories.toArray().sort(
+          func(s1, s2) { Int.compare(s2.timestamp, s1.timestamp) }
+        );
+        if (storyIndex >= userStoriesArray.size()) {
+          Runtime.trap("Invalid story index");
+        };
+
+        let newHighlight = List.empty<Story>();
+        newHighlight.add(userStoriesArray[storyIndex]);
+
+        switch (storyHighlights.get(caller)) {
+          case (?existingHighlights) {
+            existingHighlights.add(userStoriesArray[storyIndex]);
+            storyHighlights.add(caller, existingHighlights);
+          };
+          case (null) {
+            storyHighlights.add(caller, newHighlight);
+          };
+        };
+      };
+      case (null) { Runtime.trap("Story not found") };
+    };
+  };
+
+  public query ({ caller }) func getStoryHighlights(user : Principal) : async [Story] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can get story highlights");
+    };
+    assertUserExists(user);
+
+    switch (storyHighlights.get(user)) {
+      case (?highlights) { highlights.toArray() };
       case (null) { [] };
     };
   };
@@ -479,17 +592,19 @@ actor {
     };
   };
 
-  public query ({ caller }) func getMessages(user : Principal) : async [Message] {
+  public query ({ caller }) func getMessages(partner : Principal) : async [Message] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can view messages");
     };
     assertUserExists(caller);
-    assertUserExists(user);
 
     switch (messages.get(caller)) {
       case (?senderMessages) {
         let filteredMessages = senderMessages.toArray().filter(
-          func(msg) { msg.to == user or msg.from == user }
+          func(msg) {
+            (msg.from == caller and msg.to == partner) or
+            (msg.from == partner and msg.to == caller)
+          }
         );
         filteredMessages.sort(Message.compareByTimestamp);
       };
@@ -554,7 +669,7 @@ actor {
     matches.toArray();
   };
 
-  public query ({ caller }) func getTinderQueue() : async [Profile] {
+  public query ({ caller }) func getTinderQueue() : async [(Principal, Profile)] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can get Tinder queue");
     };
@@ -562,7 +677,7 @@ actor {
       func((_principal, profile)) {
         profile.displayName.contains(#text "");
       }
-    ).map(func((_, profile)) { profile });
+    ).map(func((principal, profile)) { (principal, profile) });
   };
 
   // Notifications
@@ -639,5 +754,38 @@ actor {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
     profiles.add(caller, profile);
+  };
+
+  // Star feature
+  public shared ({ caller }) func starUser(user : Principal) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can star profiles");
+    };
+    assertUserExists(user);
+
+    let existingStars = switch (starsReceived.get(user)) {
+      case (?stars) { stars };
+      case (null) {
+        let newStars = Set.empty<Principal>();
+        starsReceived.add(user, newStars);
+        newStars;
+      };
+    };
+
+    if (existingStars.contains(caller)) {
+      Runtime.trap("Already starred this profile");
+    };
+
+    existingStars.add(caller);
+  };
+
+  public query ({ caller }) func getStarsReceived() : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view stars");
+    };
+    switch (starsReceived.get(caller)) {
+      case (?stars) { stars.size() };
+      case (null) { 0 };
+    };
   };
 };

@@ -135,10 +135,17 @@ export interface _CaffeineStorageCreateCertificateResult {
 export interface Profile {
     bio: string;
     displayName: string;
+    interests: string;
+    education: string;
     website: string;
+    coverPhoto?: ExternalBlob;
     birthday: string;
     gender: string;
+    favSongs: string;
+    thoughts: string;
+    favMovies: string;
     location: string;
+    hobbies: string;
     avatar?: ExternalBlob;
     relationshipStatus: string;
 }
@@ -159,6 +166,7 @@ export interface backendInterface {
     _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
+    acceptRequest(user: Principal): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     commentOnPost(postId: bigint, content: string): Promise<void>;
     createPost(content: string, image: ExternalBlob | null): Promise<void>;
@@ -171,12 +179,15 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getFollowers(user: Principal): Promise<Array<Principal>>;
     getFollowing(user: Principal): Promise<Array<Principal>>;
+    getFriends(): Promise<Array<Principal>>;
     getMatches(): Promise<Array<Principal>>;
     getMessages(user: Principal): Promise<Array<Message>>;
     getNotifications(): Promise<Array<Notification>>;
     getPostsByUser(user: Principal): Promise<Array<PostDTO>>;
     getProfile(user: Principal): Promise<Profile>;
+    getStarsReceived(): Promise<bigint>;
     getStories(user: Principal): Promise<Array<Story>>;
+    getStoryHighlights(user: Principal): Promise<Array<Story>>;
     getTinderQueue(): Promise<Array<Profile>>;
     getUnreadNotificationCount(): Promise<bigint>;
     getUserProfile(user: Principal): Promise<Profile | null>;
@@ -184,8 +195,10 @@ export interface backendInterface {
     likePost(postId: bigint): Promise<void>;
     markNotificationsRead(): Promise<void>;
     saveCallerUserProfile(profile: Profile): Promise<void>;
+    saveStoryToHighlight(storyIndex: bigint): Promise<void>;
     searchUsers(term: string): Promise<Array<[Principal, Profile]>>;
     sendMessage(to: Principal, content: string): Promise<void>;
+    starUser(user: Principal): Promise<void>;
     tinderLike(user: Principal): Promise<void>;
     tinderPass(user: Principal): Promise<void>;
     unfollow(user: Principal): Promise<void>;
@@ -290,6 +303,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor._initializeAccessControlWithSecret(arg0);
+            return result;
+        }
+    }
+    async acceptRequest(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.acceptRequest(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.acceptRequest(arg0);
             return result;
         }
     }
@@ -461,6 +488,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getFriends(): Promise<Array<Principal>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getFriends();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getFriends();
+            return result;
+        }
+    }
     async getMatches(): Promise<Array<Principal>> {
         if (this.processError) {
             try {
@@ -531,6 +572,20 @@ export class Backend implements backendInterface {
             return from_candid_Profile_n21(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getStarsReceived(): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getStarsReceived();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getStarsReceived();
+            return result;
+        }
+    }
     async getStories(arg0: Principal): Promise<Array<Story>> {
         if (this.processError) {
             try {
@@ -542,6 +597,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getStories(arg0);
+            return from_candid_vec_n26(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getStoryHighlights(arg0: Principal): Promise<Array<Story>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getStoryHighlights(arg0);
+                return from_candid_vec_n26(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getStoryHighlights(arg0);
             return from_candid_vec_n26(this._uploadFile, this._downloadFile, result);
         }
     }
@@ -643,6 +712,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async saveStoryToHighlight(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.saveStoryToHighlight(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.saveStoryToHighlight(arg0);
+            return result;
+        }
+    }
     async searchUsers(arg0: string): Promise<Array<[Principal, Profile]>> {
         if (this.processError) {
             try {
@@ -668,6 +751,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.sendMessage(arg0, arg1);
+            return result;
+        }
+    }
+    async starUser(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.starUser(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.starUser(arg0);
             return result;
         }
     }
@@ -802,29 +899,50 @@ async function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promi
 async function from_candid_record_n22(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     bio: string;
     displayName: string;
+    interests: string;
+    education: string;
     website: string;
+    coverPhoto: [] | [_ExternalBlob];
     birthday: string;
     gender: string;
+    favSongs: string;
+    thoughts: string;
+    favMovies: string;
     location: string;
+    hobbies: string;
     avatar: [] | [_ExternalBlob];
     relationshipStatus: string;
 }): Promise<{
     bio: string;
     displayName: string;
+    interests: string;
+    education: string;
     website: string;
+    coverPhoto?: ExternalBlob;
     birthday: string;
     gender: string;
+    favSongs: string;
+    thoughts: string;
+    favMovies: string;
     location: string;
+    hobbies: string;
     avatar?: ExternalBlob;
     relationshipStatus: string;
 }> {
     return {
         bio: value.bio,
         displayName: value.displayName,
+        interests: value.interests,
+        education: value.education,
         website: value.website,
+        coverPhoto: record_opt_to_undefined(await from_candid_opt_n17(_uploadFile, _downloadFile, value.coverPhoto)),
         birthday: value.birthday,
         gender: value.gender,
+        favSongs: value.favSongs,
+        thoughts: value.thoughts,
+        favMovies: value.favMovies,
         location: value.location,
+        hobbies: value.hobbies,
         avatar: record_opt_to_undefined(await from_candid_opt_n17(_uploadFile, _downloadFile, value.avatar)),
         relationshipStatus: value.relationshipStatus
     };
@@ -907,29 +1025,50 @@ async function to_candid_opt_n10(_uploadFile: (file: ExternalBlob) => Promise<Ui
 async function to_candid_record_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     bio: string;
     displayName: string;
+    interests: string;
+    education: string;
     website: string;
+    coverPhoto?: ExternalBlob;
     birthday: string;
     gender: string;
+    favSongs: string;
+    thoughts: string;
+    favMovies: string;
     location: string;
+    hobbies: string;
     avatar?: ExternalBlob;
     relationshipStatus: string;
 }): Promise<{
     bio: string;
     displayName: string;
+    interests: string;
+    education: string;
     website: string;
+    coverPhoto: [] | [_ExternalBlob];
     birthday: string;
     gender: string;
+    favSongs: string;
+    thoughts: string;
+    favMovies: string;
     location: string;
+    hobbies: string;
     avatar: [] | [_ExternalBlob];
     relationshipStatus: string;
 }> {
     return {
         bio: value.bio,
         displayName: value.displayName,
+        interests: value.interests,
+        education: value.education,
         website: value.website,
+        coverPhoto: value.coverPhoto ? candid_some(await to_candid_ExternalBlob_n11(_uploadFile, _downloadFile, value.coverPhoto)) : candid_none(),
         birthday: value.birthday,
         gender: value.gender,
+        favSongs: value.favSongs,
+        thoughts: value.thoughts,
+        favMovies: value.favMovies,
         location: value.location,
+        hobbies: value.hobbies,
         avatar: value.avatar ? candid_some(await to_candid_ExternalBlob_n11(_uploadFile, _downloadFile, value.avatar)) : candid_none(),
         relationshipStatus: value.relationshipStatus
     };

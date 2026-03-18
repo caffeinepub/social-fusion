@@ -47,88 +47,96 @@ export default function NotificationsPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 z-40"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
             onClick={onClose}
           />
-          {/* Panel */}
+          {/* Centered card */}
           <motion.div
-            key="notif-panel"
+            key="notif-modal"
             data-ocid="notifications.panel"
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.2 }}
-            className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-card border-b border-border shadow-2xl z-50 max-h-[75dvh] flex flex-col rounded-b-3xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{
+              duration: 0.22,
+              type: "spring",
+              damping: 22,
+              stiffness: 300,
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-4 border-b border-border shrink-0">
-              <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-primary" />
-                <h2 className="font-bold text-base font-display">
-                  Notifications
-                </h2>
+            <div className="pointer-events-auto w-full max-w-sm bg-[#1a1a2e] border border-white/15 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[80dvh]">
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-pink-400" />
+                  <h2 className="font-bold text-base text-white">
+                    Notifications
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-ocid="notifications.secondary_button"
+                    onClick={handleMarkAllRead}
+                    disabled={markRead.isPending}
+                    className="text-xs text-pink-400 flex items-center gap-1 hover:opacity-80 transition-opacity"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Mark all read
+                  </button>
+                  <button
+                    type="button"
+                    data-ocid="notifications.close_button"
+                    onClick={onClose}
+                    className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5 text-white" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  data-ocid="notifications.secondary_button"
-                  onClick={handleMarkAllRead}
-                  disabled={markRead.isPending}
-                  className="text-xs text-primary flex items-center gap-1 hover:opacity-80 transition-opacity"
-                >
-                  <Check className="w-3.5 h-3.5" /> Mark all read
-                </button>
-                <button
-                  type="button"
-                  data-ocid="notifications.close_button"
-                  onClick={onClose}
-                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
 
-            {/* List */}
-            <div className="flex-1 overflow-y-auto">
-              {isLoading ? (
-                <div
-                  data-ocid="notifications.loading_state"
-                  className="p-4 flex flex-col gap-3"
-                >
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="w-10 h-10 rounded-full shrink-0" />
-                      <div className="flex flex-col gap-1.5 flex-1">
-                        <Skeleton className="w-48 h-3" />
-                        <Skeleton className="w-24 h-2" />
+              {/* List */}
+              <div className="flex-1 overflow-y-auto">
+                {isLoading ? (
+                  <div
+                    data-ocid="notifications.loading_state"
+                    className="p-4 flex flex-col gap-3"
+                  >
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                        <div className="flex flex-col gap-1.5 flex-1">
+                          <Skeleton className="w-48 h-3" />
+                          <Skeleton className="w-24 h-2" />
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : notifications && notifications.length > 0 ? (
-                <div className="flex flex-col">
-                  {notifications.map((notif, i) => (
-                    <NotificationItem
-                      key={notif.id.toString()}
-                      notification={notif}
-                      index={i}
-                      onProfileClick={onProfileClick}
-                      onClose={onClose}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div
-                  data-ocid="notifications.empty_state"
-                  className="flex flex-col items-center justify-center py-12 gap-3"
-                >
-                  <BellOff className="w-10 h-10 text-muted-foreground" />
-                  <p className="text-muted-foreground text-sm">
-                    No notifications yet
-                  </p>
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : notifications && notifications.length > 0 ? (
+                  <div className="flex flex-col">
+                    {notifications.map((notif, i) => (
+                      <NotificationItem
+                        key={notif.id.toString()}
+                        notification={notif}
+                        index={i}
+                        onProfileClick={onProfileClick}
+                        onClose={onClose}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    data-ocid="notifications.empty_state"
+                    className="flex flex-col items-center justify-center py-12 gap-3"
+                  >
+                    <BellOff className="w-10 h-10 text-white/20" />
+                    <p className="text-white/40 text-sm">
+                      No notifications yet
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         </>
@@ -155,15 +163,15 @@ function NotificationItem({
   const getIcon = () => {
     switch (notification.kind) {
       case "follow":
-        return <UserPlus className="w-3.5 h-3.5 text-blue-500" />;
+        return <UserPlus className="w-3.5 h-3.5 text-blue-400" />;
       case "like":
-        return <Heart className="w-3.5 h-3.5 text-rose-500" />;
+        return <Heart className="w-3.5 h-3.5 text-rose-400" />;
       case "comment":
-        return <MessageCircle className="w-3.5 h-3.5 text-green-500" />;
+        return <MessageCircle className="w-3.5 h-3.5 text-green-400" />;
       case "match":
-        return <Heart className="w-3.5 h-3.5 text-pink-500" />;
+        return <Heart className="w-3.5 h-3.5 text-pink-400" />;
       default:
-        return <Bell className="w-3.5 h-3.5 text-muted-foreground" />;
+        return <Bell className="w-3.5 h-3.5 text-white/40" />;
     }
   };
 
@@ -204,8 +212,8 @@ function NotificationItem({
       type="button"
       data-ocid={`notifications.item.${index + 1}`}
       onClick={handleClick}
-      className={`flex items-center gap-3 px-4 py-3 border-b border-border/50 w-full text-left transition-colors active:bg-white/5 hover:bg-white/5 ${
-        !notification.read ? "bg-primary/5" : ""
+      className={`flex items-center gap-3 px-4 py-3 border-b border-white/5 w-full text-left transition-colors active:bg-white/5 hover:bg-white/5 ${
+        !notification.read ? "bg-pink-500/5" : ""
       }`}
     >
       <div className="relative shrink-0">
@@ -213,22 +221,22 @@ function NotificationItem({
           {fromProfile?.avatar && (
             <AvatarImage src={fromProfile.avatar.getDirectURL()} />
           )}
-          <AvatarFallback className="bg-muted text-sm">
+          <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm">
             {fromProfile?.displayName?.[0]?.toUpperCase() || "?"}
           </AvatarFallback>
         </Avatar>
-        <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-card flex items-center justify-center border border-border">
+        <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#1a1a2e] flex items-center justify-center border border-white/10">
           {getIcon()}
         </div>
       </div>
       <div className="flex flex-col flex-1 min-w-0">
-        <p className="text-sm leading-snug">{getText()}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="text-sm text-white/80 leading-snug">{getText()}</p>
+        <p className="text-xs text-white/30 mt-0.5">
           {formatTs(notification.timestamp)}
         </p>
       </div>
       {!notification.read && (
-        <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+        <div className="w-2 h-2 rounded-full bg-pink-500 shrink-0" />
       )}
     </button>
   );

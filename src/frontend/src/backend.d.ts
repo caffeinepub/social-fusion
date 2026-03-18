@@ -53,10 +53,17 @@ export interface Message {
 export interface Profile {
     bio: string;
     displayName: string;
+    interests: string;
+    education: string;
     website: string;
+    coverPhoto?: ExternalBlob;
     birthday: string;
     gender: string;
+    favSongs: string;
+    thoughts: string;
+    favMovies: string;
     location: string;
+    hobbies: string;
     avatar?: ExternalBlob;
     relationshipStatus: string;
 }
@@ -66,6 +73,7 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
+    acceptRequest(user: Principal): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     commentOnPost(postId: bigint, content: string): Promise<void>;
     createPost(content: string, image: ExternalBlob | null): Promise<void>;
@@ -78,21 +86,26 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getFollowers(user: Principal): Promise<Array<Principal>>;
     getFollowing(user: Principal): Promise<Array<Principal>>;
+    getFriends(): Promise<Array<Principal>>;
     getMatches(): Promise<Array<Principal>>;
     getMessages(user: Principal): Promise<Array<Message>>;
     getNotifications(): Promise<Array<Notification>>;
     getPostsByUser(user: Principal): Promise<Array<PostDTO>>;
     getProfile(user: Principal): Promise<Profile>;
+    getStarsReceived(): Promise<bigint>;
     getStories(user: Principal): Promise<Array<Story>>;
-    getTinderQueue(): Promise<Array<Profile>>;
+    getStoryHighlights(user: Principal): Promise<Array<Story>>;
+    getTinderQueue(): Promise<Array<[Principal, Profile]>>;
     getUnreadNotificationCount(): Promise<bigint>;
     getUserProfile(user: Principal): Promise<Profile | null>;
     isCallerAdmin(): Promise<boolean>;
     likePost(postId: bigint): Promise<void>;
     markNotificationsRead(): Promise<void>;
     saveCallerUserProfile(profile: Profile): Promise<void>;
+    saveStoryToHighlight(storyIndex: bigint): Promise<void>;
     searchUsers(term: string): Promise<Array<[Principal, Profile]>>;
     sendMessage(to: Principal, content: string): Promise<void>;
+    starUser(user: Principal): Promise<void>;
     tinderLike(user: Principal): Promise<void>;
     tinderPass(user: Principal): Promise<void>;
     unfollow(user: Principal): Promise<void>;

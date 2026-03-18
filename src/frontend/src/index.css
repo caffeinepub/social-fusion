@@ -126,3 +126,31 @@
 .animate-scale-in {
   animation: scaleIn 0.15s ease-out;
 }
+
+/* Discover tab animated gradient text */
+@keyframes discover-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.discover-title {
+  background: linear-gradient(
+    90deg,
+    #ec4899,
+    #a855f7,
+    #ec4899,
+    #f472b6,
+    #a855f7
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: discover-shimmer 3s ease infinite;
+}
