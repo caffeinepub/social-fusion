@@ -4,27 +4,33 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
 import {
+  Archive,
   ArrowLeft,
+  BellOff,
   Camera,
+  CheckCheck,
   Clock,
   Edit,
   Image,
   Inbox,
   Loader2,
   Mic,
-  Palette,
   Phone,
   Phone as PhoneIcon,
+  Pin,
   Plus,
   Search,
   Settings,
+  ShieldX,
   SmilePlus,
-  ThumbsUp,
   Train,
+  Trash2,
+  User,
   Video,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../backend";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
@@ -43,6 +49,7 @@ import IcebreakerCard, { getRandomIcebreaker } from "../IcebreakerCard";
 import IncomingCallOverlay from "../IncomingCallOverlay";
 import LoveTrackScreen from "../LoveTrackScreen";
 import OutgoingCallOverlay from "../OutgoingCallOverlay";
+import StoryCreatorSheet from "../StoryCreatorSheet";
 import {
   BUBBLE_THEMES,
   BubbleThemePicker,
@@ -253,6 +260,7 @@ function ConversationList({
 }) {
   const [showNewChatSheet, setShowNewChatSheet] = useState(false);
   const [showLoveTrack, setShowLoveTrack] = useState(false);
+  const [showStoryCreatorInList, setShowStoryCreatorInList] = useState(false);
   const { data: profiles, isLoading } = useGetAllProfiles();
   const { data: friendPrincipals } = useGetFriends();
   const { blockedSet } = useBlockedUsers();
@@ -290,10 +298,268 @@ function ConversationList({
         ? [] // only friends/matches visible
         : otherNonFriendsAll;
 
+  // Chat options state
+  const [mutedChats, setMutedChats] = React.useState<Set<string>>(() => {
+    try {
+      return new Set(
+        JSON.parse(localStorage.getItem("sf_muted_chats") || "[]"),
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const [archivedChats, setArchivedChats] = React.useState<Set<string>>(() => {
+    try {
+      return new Set(
+        JSON.parse(localStorage.getItem("sf_archived_chats") || "[]"),
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const [deletedChats, setDeletedChats] = React.useState<Set<string>>(() => {
+    try {
+      return new Set(
+        JSON.parse(localStorage.getItem("sf_deleted_convos") || "[]"),
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const [pinnedChats, setPinnedChats] = React.useState<Set<string>>(() => {
+    try {
+      return new Set(
+        JSON.parse(localStorage.getItem("sf_pinned_chats") || "[]"),
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const [chatOptionsUser, setChatOptionsUser] = React.useState<{
+    principal: Principal;
+    profile: Profile;
+  } | null>(null);
+
+  const toggleMute = (pid: string) => {
+    setMutedChats((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      localStorage.setItem("sf_muted_chats", JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const toggleArchive = (pid: string) => {
+    setArchivedChats((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      localStorage.setItem("sf_archived_chats", JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const togglePin = (pid: string) => {
+    setPinnedChats((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      localStorage.setItem("sf_pinned_chats", JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const deleteChat = (pid: string) => {
+    setDeletedChats((prev) => {
+      const next = new Set(prev);
+      next.add(pid);
+      localStorage.setItem("sf_deleted_convos", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  // Filter out deleted and archived convos from main list; pinned go to top
+  const visibleFriends = friendUsers.filter(
+    ([p]) =>
+      !deletedChats.has(p.toString()) && !archivedChats.has(p.toString()),
+  );
+  const visibleOthers = otherNonFriends.filter(
+    ([p]) =>
+      !deletedChats.has(p.toString()) && !archivedChats.has(p.toString()),
+  );
+  const pinnedFriends = visibleFriends.filter(([p]) =>
+    pinnedChats.has(p.toString()),
+  );
+  const unpinnedFriends = visibleFriends.filter(
+    ([p]) => !pinnedChats.has(p.toString()),
+  );
+  const pinnedOthers = visibleOthers.filter(([p]) =>
+    pinnedChats.has(p.toString()),
+  );
+  const unpinnedOthers = visibleOthers.filter(
+    ([p]) => !pinnedChats.has(p.toString()),
+  );
+
   return (
     <>
       {showLoveTrack && (
         <LoveTrackScreen onClose={() => setShowLoveTrack(false)} />
+      )}
+      <StoryCreatorSheet
+        open={showStoryCreatorInList}
+        onClose={() => setShowStoryCreatorInList(false)}
+      />
+      {/* Chat options bottom sheet */}
+      {chatOptionsUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          style={{ background: "rgba(0,0,0,0.6)" }}
+          onClick={() => setChatOptionsUser(null)}
+          onKeyDown={() => setChatOptionsUser(null)}
+          role="presentation"
+        >
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            className="w-full rounded-t-3xl p-6"
+            style={{
+              background: "#1a0a2e",
+              border: "1px solid rgba(236,72,153,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <div className="flex items-center gap-3 mb-5">
+              <Avatar className="w-10 h-10">
+                {chatOptionsUser.profile.avatar && (
+                  <AvatarImage
+                    src={chatOptionsUser.profile.avatar.getDirectURL()}
+                  />
+                )}
+                <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-sm">
+                  {chatOptionsUser.profile.displayName[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <p className="text-white font-semibold">
+                {chatOptionsUser.profile.displayName}
+              </p>
+            </div>
+            <div className="flex flex-col">
+              {(
+                [
+                  {
+                    label: "View Profile",
+                    icon: (
+                      <User className="w-[18px] h-[18px] text-purple-400" />
+                    ),
+                    iconBg: "rgba(168,85,247,0.15)",
+                    action: () => {
+                      onSelect(chatOptionsUser);
+                      setChatOptionsUser(null);
+                    },
+                  },
+                  {
+                    label: pinnedChats.has(chatOptionsUser.principal.toString())
+                      ? "Unpin Chat"
+                      : "Pin to Top",
+                    icon: <Pin className="w-[18px] h-[18px] text-amber-400" />,
+                    iconBg: "rgba(251,191,36,0.12)",
+                    action: () => {
+                      togglePin(chatOptionsUser.principal.toString());
+                      setChatOptionsUser(null);
+                    },
+                  },
+                  {
+                    label: mutedChats.has(chatOptionsUser.principal.toString())
+                      ? "Unmute"
+                      : "Mute Notifications",
+                    icon: (
+                      <BellOff className="w-[18px] h-[18px] text-blue-400" />
+                    ),
+                    iconBg: "rgba(96,165,250,0.12)",
+                    action: () => {
+                      toggleMute(chatOptionsUser.principal.toString());
+                      setChatOptionsUser(null);
+                    },
+                  },
+                  {
+                    label: "Mark as Read",
+                    icon: (
+                      <CheckCheck className="w-[18px] h-[18px] text-green-400" />
+                    ),
+                    iconBg: "rgba(74,222,128,0.12)",
+                    action: () => setChatOptionsUser(null),
+                  },
+                  {
+                    label: "Archive Chat",
+                    icon: (
+                      <Archive className="w-[18px] h-[18px] text-white/40" />
+                    ),
+                    iconBg: "rgba(255,255,255,0.06)",
+                    action: () => {
+                      toggleArchive(chatOptionsUser.principal.toString());
+                      setChatOptionsUser(null);
+                    },
+                  },
+                ] as Array<{
+                  label: string;
+                  icon: React.ReactNode;
+                  iconBg: string;
+                  action: () => void;
+                }>
+              ).map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  data-ocid="messages.button"
+                  onClick={opt.action}
+                  className="flex items-center gap-4 px-1 py-3.5 rounded-xl transition-colors active:bg-white/5"
+                >
+                  <div
+                    className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
+                    style={{ background: opt.iconBg }}
+                  >
+                    {opt.icon}
+                  </div>
+                  <span className="text-white/90 text-sm font-medium text-left flex-1">
+                    {opt.label}
+                  </span>
+                </button>
+              ))}
+              <div
+                className="h-px my-1"
+                style={{ background: "rgba(255,255,255,0.06)" }}
+              />
+              <button
+                type="button"
+                data-ocid="messages.delete_button"
+                onClick={() => {
+                  deleteChat(chatOptionsUser.principal.toString());
+                  setChatOptionsUser(null);
+                }}
+                className="flex items-center gap-4 px-1 py-3.5 rounded-xl transition-colors active:bg-red-500/5"
+              >
+                <div
+                  className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
+                  style={{ background: "rgba(239,68,68,0.12)" }}
+                >
+                  <Trash2 className="w-[18px] h-[18px] text-red-400" />
+                </div>
+                <span className="text-red-400 text-sm font-medium text-left flex-1">
+                  Delete Conversation
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              data-ocid="messages.cancel_button"
+              onClick={() => setChatOptionsUser(null)}
+              className="w-full mt-4 py-3 text-white/40 text-sm"
+            >
+              Cancel
+            </button>
+          </motion.div>
+        </div>
       )}
       <div
         data-ocid="messages.page"
@@ -366,6 +632,7 @@ function ConversationList({
               <button
                 type="button"
                 data-ocid="messages.upload_button"
+                onClick={() => setShowStoryCreatorInList(true)}
                 className="w-14 h-14 rounded-full border-2 border-dashed border-pink-500/50 bg-pink-500/10 flex items-center justify-center active:scale-95 transition-transform"
               >
                 <Plus className="w-5 h-5 text-pink-400" />
@@ -433,108 +700,167 @@ function ConversationList({
             </div>
           ) : otherUsers.length > 0 ? (
             <div className="flex flex-col">
-              {friendUsers.length > 0 && (
+              {visibleFriends.length > 0 && (
                 <div className="px-4 pt-3 pb-1">
                   <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">
                     Friends & Chats
                   </p>
                 </div>
               )}
-              {friendUsers.map(
-                ([principal, profile]: [Principal, Profile], i) => (
-                  <button
-                    key={`friend-${principal.toString()}`}
-                    type="button"
-                    data-ocid={`messages.item.${i + 1}`}
-                    onClick={() => onSelect({ principal, profile })}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
-                  >
-                    <div className="relative shrink-0">
-                      <div
-                        className="w-13 h-13 rounded-full p-[2px]"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #ec4899, #a855f7)",
-                        }}
+              {/* Pinned friends first */}
+              {[...pinnedFriends, ...unpinnedFriends].map(
+                ([principal, profile]: [Principal, Profile], i) => {
+                  const pid = principal.toString();
+                  const isPinned = pinnedChats.has(pid);
+                  const isMuted = mutedChats.has(pid);
+                  return (
+                    <div
+                      key={`friend-${pid}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                    >
+                      <button
+                        type="button"
+                        data-ocid={`messages.item.${i + 1}`}
+                        onClick={() => onSelect({ principal, profile })}
+                        className="flex items-center gap-3 flex-1 min-w-0"
                       >
-                        <Avatar className="w-11 h-11 block">
-                          {profile.avatar && (
-                            <AvatarImage src={profile.avatar.getDirectURL()} />
-                          )}
-                          <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
-                            {profile.displayName[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                      </div>
-                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
-                    </div>
-                    <div className="flex flex-col text-left min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-semibold text-white text-sm">
-                          {profile.displayName}
-                        </p>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-semibold">
-                          Friend
+                        <div className="relative shrink-0">
+                          <div
+                            className="w-13 h-13 rounded-full p-[2px]"
+                            style={{
+                              background: isPinned
+                                ? "linear-gradient(135deg, #f97316, #ec4899)"
+                                : "linear-gradient(135deg, #ec4899, #a855f7)",
+                            }}
+                          >
+                            <Avatar className="w-11 h-11 block">
+                              {profile.avatar && (
+                                <AvatarImage
+                                  src={profile.avatar.getDirectURL()}
+                                />
+                              )}
+                              <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
+                                {profile.displayName[0]?.toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
+                          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
+                        </div>
+                        <div className="flex flex-col text-left min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-semibold text-white text-sm">
+                              {profile.displayName}
+                            </p>
+                            {isPinned && (
+                              <span className="text-[10px]">📌</span>
+                            )}
+                            {isMuted && <span className="text-[10px]">🔕</span>}
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-semibold">
+                              Friend
+                            </span>
+                          </div>
+                          <p className="text-xs text-white/40 truncate">
+                            {profile.bio || "Tap to chat"}
+                          </p>
+                        </div>
+                        <span className="text-white/20 text-xs shrink-0">
+                          now
                         </span>
-                      </div>
-                      <p className="text-xs text-white/40 truncate">
-                        {profile.bio || "Tap to chat"}
-                      </p>
+                      </button>
+                      <button
+                        type="button"
+                        data-ocid="messages.toggle"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setChatOptionsUser({ principal, profile });
+                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white/30 hover:text-white/70 hover:bg-white/5 transition-colors"
+                      >
+                        <span className="text-lg leading-none">⋯</span>
+                      </button>
                     </div>
-                    <span className="text-white/20 text-xs shrink-0">now</span>
-                  </button>
-                ),
+                  );
+                },
               )}
-              {otherNonFriends.length > 0 && (
+              {visibleOthers.length > 0 && (
                 <div className="px-4 pt-3 pb-1">
                   <p className="text-white/30 text-xs font-semibold uppercase tracking-wider">
                     Discover People
                   </p>
                 </div>
               )}
-              {otherNonFriends.map(
-                ([principal, profile]: [Principal, Profile], i) => (
-                  <button
-                    key={principal.toString()}
-                    type="button"
-                    data-ocid={`messages.item.${friendUsers.length + i + 1}`}
-                    onClick={() => onSelect({ principal, profile })}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
-                  >
-                    {/* Avatar with gradient ring + online dot */}
-                    <div className="relative shrink-0">
-                      <div
-                        className="w-13 h-13 rounded-full p-[2px]"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #ec4899, #a855f7)",
-                        }}
+              {[...pinnedOthers, ...unpinnedOthers].map(
+                ([principal, profile]: [Principal, Profile], i) => {
+                  const pid = principal.toString();
+                  const isPinned = pinnedChats.has(pid);
+                  const isMuted = mutedChats.has(pid);
+                  return (
+                    <div
+                      key={pid}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                    >
+                      <button
+                        type="button"
+                        data-ocid={`messages.item.${visibleFriends.length + i + 1}`}
+                        onClick={() => onSelect({ principal, profile })}
+                        className="flex items-center gap-3 flex-1 min-w-0"
                       >
-                        <Avatar className="w-11 h-11 block">
-                          {profile.avatar && (
-                            <AvatarImage src={profile.avatar.getDirectURL()} />
+                        <div className="relative shrink-0">
+                          <div
+                            className="w-13 h-13 rounded-full p-[2px]"
+                            style={{
+                              background: isPinned
+                                ? "linear-gradient(135deg, #f97316, #ec4899)"
+                                : "linear-gradient(135deg, #ec4899, #a855f7)",
+                            }}
+                          >
+                            <Avatar className="w-11 h-11 block">
+                              {profile.avatar && (
+                                <AvatarImage
+                                  src={profile.avatar.getDirectURL()}
+                                />
+                              )}
+                              <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
+                                {profile.displayName[0]?.toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          </div>
+                          {i < 3 && (
+                            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
                           )}
-                          <AvatarFallback className="bg-gradient-to-br from-pink-500/30 to-purple-600/30 text-white text-sm">
-                            {profile.displayName[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                      </div>
-                      {/* Online dot on first 3 users */}
-                      {i < 3 && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-400 border-2 border-[#0a0a0f]" />
-                      )}
+                        </div>
+                        <div className="flex flex-col text-left min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-semibold text-white text-sm">
+                              {profile.displayName}
+                            </p>
+                            {isPinned && (
+                              <span className="text-[10px]">📌</span>
+                            )}
+                            {isMuted && <span className="text-[10px]">🔕</span>}
+                          </div>
+                          <p className="text-xs text-white/40 truncate">
+                            {profile.bio || "Tap to chat"}
+                          </p>
+                        </div>
+                        <span className="text-white/20 text-xs shrink-0">
+                          now
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        data-ocid="messages.toggle"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setChatOptionsUser({ principal, profile });
+                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white/30 hover:text-white/70 hover:bg-white/5 transition-colors"
+                      >
+                        <span className="text-lg leading-none">⋯</span>
+                      </button>
                     </div>
-                    <div className="flex flex-col text-left min-w-0 flex-1">
-                      <p className="font-semibold text-white text-sm">
-                        {profile.displayName}
-                      </p>
-                      <p className="text-xs text-white/40 truncate">
-                        {profile.bio || "Tap to chat"}
-                      </p>
-                    </div>
-                    <span className="text-white/20 text-xs shrink-0">now</span>
-                  </button>
-                ),
+                  );
+                },
               )}
             </div>
           ) : (
@@ -572,11 +898,34 @@ function ConversationList({
 
 type Reaction = { emoji: string; msgIndex: number };
 
-function TypingIndicator() {
+function TypingIndicator({
+  otherPrincipal,
+  otherName,
+}: { otherPrincipal: string; otherName: string }) {
+  const [isTyping, setIsTyping] = React.useState(false);
+
+  React.useEffect(() => {
+    const check = () => {
+      const raw = localStorage.getItem(`sf_typing_${otherPrincipal}`);
+      if (!raw) {
+        setIsTyping(false);
+        return;
+      }
+      const ts = Number(raw);
+      setIsTyping(Date.now() - ts < 3000);
+    };
+    check();
+    const t = setInterval(check, 1000);
+    return () => clearInterval(t);
+  }, [otherPrincipal]);
+
+  if (!isTyping) return null;
+
   return (
     <div className="flex items-end gap-2 justify-start">
       <div className="w-6 h-6 shrink-0 mb-1" />
-      <div className="bg-white/10 px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1">
+      <div className="bg-white/10 px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-2">
+        <span className="text-white/40 text-xs">{otherName} is typing</span>
         {[0, 1, 2].map((i) => (
           <motion.span
             key={i}
@@ -740,10 +1089,28 @@ function ConversationView({
 
   const handleInitCall = (mode: "voice" | "video") => {
     setOutgoingCall(mode);
-    setTimeout(() => {
+    // Write call signal to callee's localStorage key
+    const calleePid = otherUser.toString();
+    const callerId = myPrincipal?.toString() ?? "unknown";
+    const callId = `call-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const signal = { callId, callerPrincipal: callerId, mode, ts: Date.now() };
+    localStorage.setItem(`sf_call_signal_${calleePid}`, JSON.stringify(signal));
+    // Auto-cancel after 30s
+    const timer = setTimeout(() => {
       setOutgoingCall(null);
-      setIncomingCallMode(mode);
-    }, 2000);
+      localStorage.removeItem(`sf_call_signal_${calleePid}`);
+    }, 30000);
+    // Poll for acceptance (same tab testing)
+    const pollInterval = setInterval(() => {
+      const raw = localStorage.getItem(`sf_call_signal_${calleePid}`);
+      if (!raw) {
+        clearInterval(pollInterval);
+        clearTimeout(timer);
+        setOutgoingCall(null);
+      }
+    }, 1000);
+    void timer;
+    void pollInterval;
   };
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [contextMenu, setContextMenu] = useState<{
@@ -751,15 +1118,24 @@ function ConversationView({
     x: number;
     y: number;
   } | null>(null);
-  const [showThemeSelector, setShowThemeSelector] = useState(false);
-  const [chatTheme, setChatTheme] = useState(CHAT_THEMES[0]);
+  const [_showThemeSelector, setShowThemeSelector] = useState(false);
+  const [_chatTheme, _setChatTheme] = useState(CHAT_THEMES[0]);
   const [showPollModal, setShowPollModal] = useState(false);
   const [polls, setPolls] = useState<
     { question: string; options: { text: string; votes: number }[] }[]
   >([]);
+  const [_localGiftMessages, _setLocalGiftMessages] = useState<
+    {
+      type: "gift";
+      giftEmoji: string;
+      giftName: string;
+      senderId: string;
+      timestamp: number;
+    }[]
+  >([]);
   const [_disappearMode, _setDisappearMode] = useState("off");
   const [chatWallpaper, setChatWallpaper] = useState("");
-  const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [_showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const [_bubbleTheme, _setBubbleTheme] = useState(BUBBLE_THEMES[0]);
   const [_showExtras, _setShowExtras] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -786,7 +1162,8 @@ function ConversationView({
     type: string;
   } | null>(null);
   const [voicePreview, setVoicePreview] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [_isRecording, setIsRecording] = useState(false);
+  const [showAttachSheet, setShowAttachSheet] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [localAudioMessages, setLocalAudioMessages] = useState<
@@ -795,6 +1172,27 @@ function ConversationView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
+  type LocalMediaMessage = {
+    type: "media";
+    mediaUrl: string;
+    mediaType: "image" | "video";
+    senderId: string;
+    timestamp: number;
+  };
+  const _mediaConvoKey = `sf_media_msg_${[myPrincipal?.toString() ?? "", otherUser.toString()].sort().join("_")}`;
+  const [localMediaMessages, setLocalMediaMessages] = useState<
+    LocalMediaMessage[]
+  >(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem(
+          `sf_media_msg_${[myPrincipal?.toString() ?? "", otherUser.toString()].sort().join("_")}`,
+        ) || "[]",
+      );
+    } catch {
+      return [];
+    }
+  });
   const { data: messages, isLoading } = useGetMessages(otherUser);
   const sendMessage = useSendMessage();
   const formatTs = useFormatTimestamp();
@@ -814,26 +1212,63 @@ function ConversationView({
     setContextMenu(null);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
     setFilePreview({ url, name: file.name, type: file.type });
+    // Also store as base64 for sending to other user
+    try {
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve((ev.target?.result as string) ?? "");
+        reader.readAsDataURL(file);
+      });
+      const mediaType = file.type.startsWith("video/") ? "video" : "image";
+      const convoKey = _mediaConvoKey;
+      const existing = JSON.parse(
+        localStorage.getItem(convoKey) || "[]",
+      ) as LocalMediaMessage[];
+      existing.push({
+        type: "media",
+        mediaUrl: b64,
+        mediaType,
+        senderId: myPrincipal?.toString() ?? "",
+        timestamp: Date.now(),
+      });
+      // Keep only last 50
+      while (existing.length > 50) existing.shift();
+      localStorage.setItem(convoKey, JSON.stringify(existing));
+      setLocalMediaMessages((prev) => [
+        ...prev,
+        {
+          type: "media",
+          mediaUrl: b64,
+          mediaType,
+          senderId: myPrincipal?.toString() ?? "",
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch {}
   };
 
-  const handleSendWithFile = async (e: React.FormEvent) => {
+  const handleSendWithFile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim() && !filePreview) return;
-    try {
-      const content =
-        text.trim() || (filePreview ? `📎 ${filePreview.name}` : "");
-      await sendMessage.mutateAsync({ to: otherUser, content });
-      setText("");
-      if (filePreview) {
-        URL.revokeObjectURL(filePreview.url);
-        setFilePreview(null);
-      }
-    } catch {}
+    const content =
+      text.trim() || (filePreview ? `📎 ${filePreview.name}` : "");
+    // Optimistic: clear UI immediately
+    setText("");
+    if (filePreview) {
+      URL.revokeObjectURL(filePreview.url);
+      setFilePreview(null);
+    }
+    // Write typing signal cleared
+    if (myPrincipal) {
+      localStorage.removeItem(`sf_typing_${myPrincipal.toString()}`);
+    }
+    // Send in background
+    sendMessage.mutate({ to: otherUser, content });
   };
 
   const startRecording = async () => {
@@ -858,7 +1293,7 @@ function ConversationView({
     } catch {}
   };
 
-  const stopRecording = () => {
+  const _stopRecording = () => {
     mediaRecorderRef.current?.stop();
     mediaRecorderRef.current = null;
     setIsRecording(false);
@@ -903,7 +1338,7 @@ function ConversationView({
       data-ocid="messages.dialog"
       className="flex flex-col h-full"
       style={{
-        background: chatWallpaper ? `${chatTheme.bg}` : chatTheme.bg,
+        background: chatWallpaper ? `${_chatTheme.bg}` : _chatTheme.bg,
         backgroundImage: chatWallpaper || undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -950,84 +1385,6 @@ function ConversationView({
             {otherProfile.displayName}
           </p>
           <p className="text-xs text-green-400">Active now</p>
-        </div>
-
-        {/* Theme selector button */}
-        <div className="relative">
-          <button
-            type="button"
-            data-ocid="messages.toggle"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowThemeSelector((v) => !v);
-            }}
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-            title="Chat theme"
-          >
-            <Palette className="w-4 h-4 text-white/70" />
-          </button>
-          <button
-            type="button"
-            data-ocid="messages.toggle"
-            onClick={() => setShowWallpaperPicker((v) => !v)}
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-            title="Chat wallpaper"
-          >
-            <span className="text-sm">🌅</span>
-          </button>
-          <button
-            type="button"
-            data-ocid="messages.toggle"
-            onClick={() => setShowWallpaperPicker((v) => !v)}
-            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
-            title="Chat wallpaper"
-          >
-            <span className="text-sm">🌅</span>
-          </button>
-
-          <AnimatePresence>
-            {showThemeSelector && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="absolute right-0 top-11 z-50 bg-[#1a1a2e] border border-white/10 rounded-2xl p-3 shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <p className="text-white/40 text-xs mb-2 text-center">
-                  Chat theme
-                </p>
-                <div className="flex gap-2">
-                  {CHAT_THEMES.map((theme) => (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      onClick={() => {
-                        setChatTheme(theme);
-                        setShowThemeSelector(false);
-                      }}
-                      className="flex flex-col items-center gap-1"
-                      title={theme.label}
-                    >
-                      <div
-                        className="w-8 h-8 rounded-full border-2 transition-all"
-                        style={{
-                          background: theme.bg,
-                          borderColor:
-                            chatTheme.id === theme.id
-                              ? "#ec4899"
-                              : "rgba(255,255,255,0.2)",
-                        }}
-                      />
-                      <span className="text-white/30 text-[9px] w-10 text-center leading-tight">
-                        {theme.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         <button
@@ -1094,11 +1451,71 @@ function ConversationView({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col-reverse gap-2">
+        {/* Local media messages */}
+        {localMediaMessages.map((mm) => {
+          const isMe = mm.senderId === myPrincipal?.toString();
+          return (
+            <div
+              key={mm.timestamp}
+              className={`flex flex-col ${isMe ? "items-end" : "items-start"} gap-0.5`}
+            >
+              <div
+                className={`flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`}
+              >
+                <div className="max-w-[70%] rounded-2xl overflow-hidden">
+                  {mm.mediaType === "video" ? (
+                    <video
+                      src={mm.mediaUrl}
+                      controls
+                      className="w-full rounded-2xl max-h-48"
+                    >
+                      <track kind="captions" />
+                    </video>
+                  ) : (
+                    <img
+                      src={mm.mediaUrl}
+                      alt="Sent media"
+                      className="w-full max-h-48 object-cover rounded-2xl"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {/* Local gift messages */}
+        {_localGiftMessages.map((gm) => {
+          const isMe = gm.senderId === myPrincipal?.toString();
+          return (
+            <div
+              key={gm.timestamp}
+              className={`flex flex-col ${isMe ? "items-end" : "items-start"} gap-0.5`}
+            >
+              <div
+                className={`flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[70%] px-4 py-3 rounded-2xl border ${isMe ? "bg-gradient-to-br from-yellow-600/30 to-orange-600/30 border-yellow-500/30 rounded-br-sm" : "bg-white/10 border-white/10 rounded-bl-sm"}`}
+                >
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-4xl">{gm.giftEmoji}</span>
+                    <span className="text-white/80 text-xs font-semibold">
+                      {gm.giftName}
+                    </span>
+                    <span className="text-yellow-400 text-[10px]">
+                      Gift sent! 🎁
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
         {/* Local voice messages */}
         {localAudioMessages.map((am) => (
           <div key={am.timestamp} className="flex flex-col items-end gap-0.5">
             <div className="flex items-end gap-2 justify-end">
-              <div className="max-w-[72%] px-3 py-2 rounded-2xl rounded-br-sm bg-gradient-to-br from-purple-600 to-violet-500">
+              <div className="max-w-[70%] px-3 py-2 rounded-2xl rounded-br-sm bg-gradient-to-br from-purple-600 to-violet-500">
                 <audio src={am.url} controls className="h-7 w-36 rounded">
                   <track kind="captions" />
                 </audio>
@@ -1108,7 +1525,10 @@ function ConversationView({
           </div>
         ))}
         {/* Typing indicator - always shown */}
-        <TypingIndicator />
+        <TypingIndicator
+          otherPrincipal={otherUser.toString()}
+          otherName={otherProfile.displayName}
+        />
 
         {isLoading ? (
           <div
@@ -1163,7 +1583,7 @@ function ConversationView({
                       </button>
                     )}
                     <div
-                      className={`relative max-w-[72%] px-3.5 py-2 rounded-2xl text-sm cursor-pointer select-none ${
+                      className={`relative max-w-[70%] px-3.5 py-2 rounded-2xl text-sm cursor-pointer select-none ${
                         isMe
                           ? "bg-gradient-to-br from-purple-600 to-violet-500 text-white rounded-br-sm"
                           : "bg-white/10 text-white rounded-bl-sm"
@@ -1419,14 +1839,6 @@ function ConversationView({
         </div>
       )}
 
-      {/* Vanish mode hint */}
-      <div className="flex items-center justify-center gap-2 py-1.5 shrink-0">
-        <div className="w-3 h-3 rounded-full border border-white/20 animate-spin border-t-transparent" />
-        <span className="text-white/20 text-[10px]">
-          Swipe up to turn on vanish mode
-        </span>
-      </div>
-
       {/* Quick Replies bar */}
       <div className="px-3 pb-1 shrink-0 overflow-x-auto no-scrollbar">
         <div className="flex gap-2 pb-1">
@@ -1459,81 +1871,202 @@ function ConversationView({
         </div>
       </div>
 
+      {/* Attachment options sheet */}
+      <AnimatePresence>
+        {showAttachSheet && (
+          <>
+            <motion.div
+              key="attach-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={() => setShowAttachSheet(false)}
+            />
+            <motion.div
+              key="attach-sheet"
+              data-ocid="messages.sheet"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl p-5 pb-10"
+              style={{
+                background: "#1a0a2e",
+                border: "1px solid rgba(236,72,153,0.2)",
+              }}
+            >
+              <div className="flex justify-center mb-4">
+                <div className="w-10 h-1 rounded-full bg-white/20" />
+              </div>
+              <p className="text-white font-bold text-base mb-4">Send</p>
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  {
+                    icon: "📷",
+                    label: "Images",
+                    action: () => {
+                      fileInputRef.current?.click();
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "🎥",
+                    label: "Video",
+                    action: () => {
+                      fileInputRef.current?.click();
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "🎵",
+                    label: "Audio",
+                    action: () => {
+                      const inp = document.createElement("input");
+                      inp.type = "file";
+                      inp.accept = "audio/*";
+                      inp.onchange = (ev) => {
+                        const file = (ev.target as HTMLInputElement).files?.[0];
+                        if (file) {
+                          const url = URL.createObjectURL(file);
+                          setFilePreview({
+                            url,
+                            name: file.name,
+                            type: file.type,
+                          });
+                        }
+                      };
+                      inp.click();
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "📁",
+                    label: "File",
+                    action: () => {
+                      fileInputRef.current?.click();
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "😊",
+                    label: "Emoji",
+                    action: () => {
+                      setShowEmojiPicker(true);
+                      setShowGifPicker(false);
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "📊",
+                    label: "Poll",
+                    action: () => {
+                      setShowPollModal(true);
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "🎬",
+                    label: "GIF",
+                    action: () => {
+                      setShowGifPicker(true);
+                      setShowEmojiPicker(false);
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "📍",
+                    label: "Location",
+                    action: () => {
+                      setText((t) => `${t} 📍 Location`);
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "👤",
+                    label: "Contact",
+                    action: () => {
+                      setText((t) => `${t} 👤 Contact`);
+                      setShowAttachSheet(false);
+                    },
+                  },
+                  {
+                    icon: "🎤",
+                    label: "Record",
+                    action: () => {
+                      startRecording();
+                      setShowAttachSheet(false);
+                    },
+                  },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    data-ocid="messages.button"
+                    onClick={opt.action}
+                    className="flex flex-col items-center gap-2 py-3 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                  >
+                    <span className="text-2xl">{opt.icon}</span>
+                    <span className="text-white/60 text-xs">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                data-ocid="messages.cancel_button"
+                onClick={() => setShowAttachSheet(false)}
+                className="w-full mt-4 py-3 text-white/40 text-sm"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Input bar */}
       <form
         onSubmit={handleSendWithFile}
         className="flex items-center gap-2 px-3 py-2 border-t border-white/5 shrink-0 pb-[calc(0.5rem+env(safe-area-inset-bottom,64px))]"
       >
+        {/* + icon opens attachment sheet */}
         <button
           type="button"
-          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0"
+          data-ocid="messages.open_modal_button"
+          onClick={() => setShowAttachSheet(true)}
+          className="w-9 h-9 flex items-center justify-center rounded-full shrink-0 transition-all active:scale-90"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(236,72,153,0.25), rgba(168,85,247,0.25))",
+            border: "1px solid rgba(236,72,153,0.3)",
+          }}
         >
-          <Plus className="w-5 h-5" />
-        </button>
-        <button
-          type="button"
-          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0"
-        >
-          <Camera className="w-5 h-5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="w-8 h-8 flex items-center justify-center text-white/40 shrink-0 active:text-purple-400 transition-colors"
-        >
-          <Image className="w-5 h-5" />
+          <Plus className="w-5 h-5 text-pink-400" />
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
+          accept="image/*,video/*,audio/*"
           className="hidden"
           onChange={handleFileSelect}
         />
-        <button
-          type="button"
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          onTouchStart={startRecording}
-          onTouchEnd={stopRecording}
-          className={`w-8 h-8 flex items-center justify-center shrink-0 transition-colors ${isRecording ? "text-red-400 animate-pulse" : "text-white/40"}`}
-          title={
-            isRecording
-              ? "Recording... release to stop"
-              : "Hold to record voice"
-          }
-        >
-          <Mic className="w-5 h-5" />
-        </button>
         <div className="flex-1 relative">
           <input
             data-ocid="messages.input"
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Aa"
+            onChange={(e) => {
+              setText(e.target.value);
+              if (myPrincipal && e.target.value.trim()) {
+                localStorage.setItem(
+                  `sf_typing_${myPrincipal.toString()}`,
+                  String(Date.now()),
+                );
+              }
+            }}
+            placeholder="Message..."
             className="w-full bg-white/10 text-white placeholder:text-white/30 rounded-full px-4 py-2 text-sm outline-none border border-white/10 focus:border-purple-500/50"
           />
         </div>
-        <button
-          type="button"
-          title="Create Poll"
-          onClick={() => setShowPollModal(true)}
-          className="w-8 h-8 flex items-center justify-center shrink-0 opacity-40 hover:opacity-80 transition-colors text-[16px]"
-        >
-          📊
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowGifPicker((v) => !v);
-            setShowEmojiPicker(false);
-          }}
-          className={`w-8 h-8 flex items-center justify-center shrink-0 transition-colors text-[16px] ${showGifPicker ? "opacity-100" : "opacity-40"}`}
-          title="GIF"
-        >
-          🎬
-        </button>
         <button
           type="button"
           onClick={(e) => {
@@ -1560,31 +2093,18 @@ function ConversationView({
               type="submit"
               data-ocid="messages.submit_button"
               size="sm"
-              disabled={sendMessage.isPending}
               className="w-8 h-8 p-0 rounded-full bg-gradient-to-br from-purple-600 to-violet-500 border-0 shrink-0"
             >
-              {sendMessage.isPending ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-3.5 h-3.5 fill-white"
-                  aria-hidden="true"
-                >
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-              )}
+              <svg
+                viewBox="0 0 24 24"
+                className="w-3.5 h-3.5 fill-white"
+                aria-hidden="true"
+              >
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+              </svg>
             </Button>
           </>
-        ) : (
-          <button
-            type="button"
-            data-ocid="messages.toggle"
-            className="w-8 h-8 flex items-center justify-center text-purple-400 shrink-0"
-          >
-            <ThumbsUp className="w-5 h-5" />
-          </button>
-        )}
+        ) : null}
       </form>
       <AnimatePresence>
         {activeCall && (
@@ -1681,7 +2201,7 @@ function ConversationView({
           )}
         </div>
       )}
-      {showWallpaperPicker && (
+      {_showWallpaperPicker && (
         <div className="px-3 pb-3 bg-black/40 backdrop-blur-sm border-t border-white/10 shrink-0">
           <div className="flex items-center justify-between py-2">
             <p className="text-white/70 text-xs font-semibold">

@@ -89,9 +89,10 @@ export default function CallHistoryScreen({ onBack }: Props) {
                 >
                   <Avatar className="w-12 h-12 shrink-0">
                     {profile.avatar && (
-                      <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-500 text-white font-bold">
-                        {profile.displayName[0]?.toUpperCase()}
-                      </AvatarFallback>
+                      <AvatarImage
+                        src={profile.avatar.getDirectURL()}
+                        alt={profile.displayName}
+                      />
                     )}
                     <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-500 text-white font-bold">
                       {profile.displayName[0]?.toUpperCase()}

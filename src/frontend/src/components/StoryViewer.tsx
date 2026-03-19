@@ -52,9 +52,34 @@ export default function StoryViewer({
   const [allComments, setAllComments] = useState<
     { storyIdx: number; comments: Comment[] }[]
   >(() => stories.map((_, i) => ({ storyIdx: i, comments: [] })));
+  const [localMediaUrls, setLocalMediaUrls] = useState<
+    Record<number, { type: string; data: string }>
+  >({});
   const pausedRef = useRef(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load locally stored media (from StoryCreatorSheet)
+  useEffect(() => {
+    try {
+      const refs = JSON.parse(
+        localStorage.getItem("sf_story_media_refs") || "[]",
+      ) as string[];
+      const loaded: Record<number, { type: string; data: string }> = {};
+      // Map the most recent N media items to story indices (last N stories)
+      const startIdx = Math.max(0, stories.length - refs.length);
+      refs.slice(-stories.length).forEach((key, i) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { type: string; data: string };
+            loaded[startIdx + i] = parsed;
+          }
+        } catch {}
+      });
+      if (Object.keys(loaded).length > 0) setLocalMediaUrls(loaded);
+    } catch {}
+  }, [stories.length]);
 
   pausedRef.current = paused;
 
@@ -256,7 +281,24 @@ export default function StoryViewer({
             }}
             aria-label="Story tap navigation"
           >
-            {story.image ? (
+            {localMediaUrls[currentIndex]?.type === "video" ? (
+              <video
+                src={localMediaUrls[currentIndex].data}
+                className="w-full h-full object-cover"
+                autoPlay
+                muted={muted}
+                loop
+                playsInline
+              >
+                <track kind="captions" />
+              </video>
+            ) : localMediaUrls[currentIndex]?.type === "image" ? (
+              <img
+                src={localMediaUrls[currentIndex].data}
+                alt="Story"
+                className="w-full h-full object-cover"
+              />
+            ) : story.image ? (
               <img
                 src={story.image.getDirectURL()}
                 alt="Story"

@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Bell,
   Camera,
   ChevronDown,
   ChevronLeft,
@@ -84,7 +85,7 @@ import {
 
 const MOODS = ["😊", "🎉", "❤️", "🔥", "😴"];
 
-const REEL_PLACEHOLDERS = [
+const _REEL_PLACEHOLDERS = [
   { id: "r1", gradient: "from-pink-900/60 to-purple-900/60" },
   { id: "r2", gradient: "from-blue-900/60 to-cyan-900/60" },
   { id: "r3", gradient: "from-orange-900/60 to-red-900/60" },
@@ -123,7 +124,7 @@ export default function ProfileTab() {
   const { data: posts } = useGetPostsByUser(myPrincipal);
   const { data: followers } = useGetFollowers(myPrincipal);
   const { data: following } = useGetFollowing(myPrincipal);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [privacyOpen, _setPrivacyOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [premiumTrial, setPremiumTrial] = useState<{
     isPremium: boolean;
@@ -140,6 +141,7 @@ export default function ProfileTab() {
     } catch {}
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("customize");
   const [liveOpen, setLiveOpen] = useState(false);
   const [userStatus, setUserStatus] = useState("");
   const [relGoal, setRelGoal] = useState("");
@@ -153,9 +155,9 @@ export default function ProfileTab() {
   const [deletedPostIds, setDeletedPostIds] = useState<Set<string>>(new Set());
 
   // Privacy toggles
-  const [isPublic, setIsPublic] = useState(true);
-  const [showOnlineStatus, setShowOnlineStatus] = useState(true);
-  const [readReceipts, setReadReceipts] = useState(true);
+  const [_isPublic, _setIsPublic] = useState(true);
+  const [_showOnlineStatus, _setShowOnlineStatus] = useState(true);
+  const [_readReceipts, _setReadReceipts] = useState(true);
 
   useEffect(() => {
     const strength = calcProfileStrength(profile ?? undefined);
@@ -242,11 +244,16 @@ export default function ProfileTab() {
           </button>
           <button
             type="button"
-            onClick={() => setPrivacyOpen(!privacyOpen)}
+            data-ocid="profile.toggle"
+            onClick={() => {
+              setSettingsTab("notifications");
+              setSettingsOpen(true);
+            }}
             className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center"
           >
-            <Share2 className="w-4 h-4 text-white/80" />
+            <Bell className="w-4 h-4 text-white/80" />
           </button>
+
           <button
             type="button"
             data-ocid="profile.delete_button"
@@ -334,6 +341,14 @@ export default function ProfileTab() {
           ))}
         </div>
 
+        {/* Thoughts - static display above stats */}
+        {profile?.thoughts?.trim() && (
+          <div className="mt-3 px-1">
+            <p className="text-white/60 text-sm italic leading-relaxed">
+              {profile.thoughts}
+            </p>
+          </div>
+        )}
         {/* Stats */}
         <div className="flex gap-0 mt-4 border border-white/10 rounded-2xl overflow-hidden">
           {[
@@ -409,40 +424,6 @@ export default function ProfileTab() {
           </div>
         ) : null}
 
-        {/* Go Premium banner */}
-        <motion.button
-          type="button"
-          data-ocid="profile.primary_button"
-          onClick={() => setPremiumOpen(true)}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full mt-3 rounded-2xl overflow-hidden flex items-center justify-between px-4 py-3 relative"
-          style={{
-            background:
-              "linear-gradient(135deg, #78350f, #d97706, #b45309, #92400e)",
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-30"
-            style={{
-              background:
-                "radial-gradient(ellipse at 30% 50%, #fcd34d 0%, transparent 60%)",
-            }}
-          />
-          <div className="flex items-center gap-2 relative z-10">
-            <Crown className="w-5 h-5 text-yellow-200" />
-            <div className="text-left">
-              <p className="text-yellow-100 font-bold text-sm">Go Premium ✨</p>
-              <p className="text-yellow-200/70 text-[11px]">
-                Unlock Super Likes, Boosts & more
-              </p>
-            </div>
-          </div>
-          <div className="relative z-10 w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-            <Crown className="w-4 h-4 text-yellow-200" />
-          </div>
-        </motion.button>
-
         {/* Profile Strength meter */}
         <div className="mt-4 bg-white/5 border border-white/10 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
@@ -481,37 +462,56 @@ export default function ProfileTab() {
         {/* Story Highlights */}
         <StoryHighlightsSection myPrincipal={myPrincipal} />
 
-        {/* Mood Board */}
-        <MoodBoardSection />
+        {/* Profile Images Carousel */}
+        <ProfileImagesCarousel profile={profile ?? null} />
 
-        {/* Action buttons row */}
-        <div className="flex gap-2 mt-4">
-          <button
-            type="button"
-            data-ocid="profile.primary_button"
-            onClick={() => setLiveOpen(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-full bg-gradient-to-r from-red-500 to-rose-600 text-white text-sm font-semibold shadow-lg shadow-red-500/20"
-          >
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-            Go Live
-          </button>
-          <button
-            type="button"
-            data-ocid="profile.secondary_button"
-            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 text-white text-sm font-semibold shadow-lg shadow-purple-500/20"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Suggestions
-          </button>
+        {/* Gift button centered */}
+        <div className="flex justify-center mt-4">
           <button
             type="button"
             data-ocid="profile.toggle"
             onClick={() => setGiftOpen(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-full bg-gradient-to-r from-red-400 to-orange-500 text-white text-sm font-semibold shadow-lg shadow-red-400/20"
+            className="flex items-center justify-center gap-2 h-11 px-8 rounded-full bg-gradient-to-r from-red-400 to-orange-500 text-white text-sm font-semibold shadow-lg shadow-red-500/20"
           >
-            <Gift className="w-3.5 h-3.5" />
-            Gifts
+            <Gift className="w-4 h-4" />
+            Send Gift
           </button>
+        </div>
+
+        {/* Extra Profile Rows */}
+        <div className="mt-4 mx-0 flex flex-col rounded-2xl overflow-hidden border border-white/10">
+          {[
+            { icon: "🎵", label: "Music", sub: "Add your favorite songs" },
+            {
+              icon: "🎙️",
+              label: "Voice Introduction",
+              sub: "Record a voice intro",
+            },
+            {
+              icon: "🔊",
+              label: "Voice Note Story",
+              sub: "Share a voice note as story",
+            },
+            {
+              icon: "🤝",
+              label: "Refer a Friend",
+              sub: "Invite friends to Social Fusion",
+            },
+          ].map((item, i, arr) => (
+            <button
+              key={item.label}
+              type="button"
+              data-ocid="profile.button"
+              className={`flex items-center gap-3 px-4 py-3.5 active:bg-white/5 transition-colors text-left ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}
+            >
+              <span className="text-xl w-8 text-center">{item.icon}</span>
+              <div className="flex-1">
+                <p className="text-white text-sm font-medium">{item.label}</p>
+                <p className="text-white/30 text-xs">{item.sub}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-white/20" />
+            </button>
+          ))}
         </div>
       </div>
 
@@ -579,12 +579,53 @@ export default function ProfileTab() {
         />
       </div>
 
+      {/* Quick Settings Shortcuts */}
+      <div className="px-4 mt-4 shrink-0 flex gap-3">
+        <button
+          type="button"
+          data-ocid="profile.secondary_button"
+          onClick={() => {
+            setSettingsTab("notifications");
+            setSettingsOpen(true);
+          }}
+          className="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-95 transition-transform"
+        >
+          <div className="w-8 h-8 rounded-full bg-pink-600/20 flex items-center justify-center shrink-0">
+            <span className="text-base">🔔</span>
+          </div>
+          <div className="text-left">
+            <p className="text-white font-semibold text-xs">Notifications</p>
+            <p className="text-white/30 text-[10px]">Manage alerts</p>
+          </div>
+        </button>
+        <button
+          type="button"
+          data-ocid="profile.secondary_button"
+          onClick={() => {
+            setSettingsTab("privacy");
+            setSettingsOpen(true);
+          }}
+          className="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-95 transition-transform"
+        >
+          <div className="w-8 h-8 rounded-full bg-purple-600/20 flex items-center justify-center shrink-0">
+            <span className="text-base">🔒</span>
+          </div>
+          <div className="text-left">
+            <p className="text-white font-semibold text-xs">Privacy</p>
+            <p className="text-white/30 text-[10px]">Control access</p>
+          </div>
+        </button>
+      </div>
+
       {/* Privacy & Membership card */}
-      <div className="px-4 mt-4 shrink-0">
+      <div className="px-4 mt-3 shrink-0">
         <button
           type="button"
           data-ocid="profile.panel"
-          onClick={() => setPrivacyOpen(!privacyOpen)}
+          onClick={() => {
+            setSettingsTab("privacy");
+            setSettingsOpen(true);
+          }}
           className="w-full flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl p-4"
         >
           <div className="w-9 h-9 rounded-full bg-purple-600/20 flex items-center justify-center shrink-0">
@@ -604,167 +645,58 @@ export default function ProfileTab() {
             }`}
           />
         </button>
-
-        {privacyOpen && (
-          <div className="bg-white/3 border border-white/8 rounded-2xl mt-1 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-              <div className="flex flex-col">
-                <p className="text-white/80 text-sm font-medium">
-                  Profile Visibility
-                </p>
-                <p className="text-white/30 text-xs">
-                  {isPublic ? "Public" : "Private"}
-                </p>
-              </div>
-              <Switch
-                data-ocid="profile.switch"
-                checked={isPublic}
-                onCheckedChange={setIsPublic}
-              />
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-              <div className="flex flex-col">
-                <p className="text-white/80 text-sm font-medium">
-                  Show Online Status
-                </p>
-                <p className="text-white/30 text-xs">
-                  {showOnlineStatus ? "Visible to others" : "Hidden"}
-                </p>
-              </div>
-              <Switch
-                data-ocid="profile.switch"
-                checked={showOnlineStatus}
-                onCheckedChange={setShowOnlineStatus}
-              />
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex flex-col">
-                <p className="text-white/80 text-sm font-medium">
-                  Read Receipts
-                </p>
-                <p className="text-white/30 text-xs">
-                  {readReceipts ? "Enabled" : "Disabled"}
-                </p>
-              </div>
-              <Switch
-                data-ocid="profile.switch"
-                checked={readReceipts}
-                onCheckedChange={setReadReceipts}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Posts / Reels tab toggle */}
+      {/* Posts grid */}
       <div className="border-t border-white/5 mt-6">
-        <Tabs defaultValue="posts" className="w-full">
-          <TabsList
-            data-ocid="profile.tab"
-            className="w-full bg-white/5 border-b border-white/5 rounded-none h-11"
-          >
-            <TabsTrigger
-              value="posts"
-              className="flex-1 gap-1.5 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:border-b-2 data-[state=active]:border-pink-500 rounded-none text-white/40"
-            >
-              <Grid className="w-4 h-4" />
-              Posts
-            </TabsTrigger>
-            <TabsTrigger
-              value="reels"
-              className="flex-1 gap-1.5 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:border-b-2 data-[state=active]:border-pink-500 rounded-none text-white/40"
-            >
-              <Video className="w-4 h-4" />
-              Reels
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="posts" className="mt-0">
-            {posts &&
-            posts.filter((p) => !deletedPostIds.has(p.id.toString())).length >
-              0 ? (
-              <div className="grid grid-cols-3 gap-0.5">
-                {posts
-                  .filter((p) => !deletedPostIds.has(p.id.toString()))
-                  .map((post, i) => {
-                    const isSelected = lightboxIdx === i;
-                    return (
-                      <button
-                        key={post.id.toString()}
-                        type="button"
-                        data-ocid={`profile.item.${i + 1}`}
-                        onClick={() => setLightboxIdx(i)}
-                        className="aspect-square bg-muted overflow-hidden relative"
-                        style={
-                          isSelected
-                            ? {
-                                outline: "3px solid white",
-                                outlineOffset: "-3px",
-                                borderRadius: 12,
-                              }
-                            : {}
+        {posts &&
+        posts.filter((p) => !deletedPostIds.has(p.id.toString())).length > 0 ? (
+          <div className="grid grid-cols-3 gap-0.5">
+            {posts
+              .filter((p) => !deletedPostIds.has(p.id.toString()))
+              .map((post, i) => (
+                <button
+                  key={post.id.toString()}
+                  type="button"
+                  data-ocid={`profile.item.${i + 1}`}
+                  onClick={() => setLightboxIdx(i)}
+                  className="aspect-square bg-muted overflow-hidden relative"
+                  style={
+                    lightboxIdx === i
+                      ? {
+                          outline: "3px solid white",
+                          outlineOffset: "-3px",
+                          borderRadius: 12,
                         }
-                      >
-                        {post.image ? (
-                          <img
-                            src={post.image.getDirectURL()}
-                            alt="Post"
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-pink-900/30 to-purple-900/30 flex items-center justify-center p-2">
-                            <p className="text-xs text-center line-clamp-3 text-white/60">
-                              {post.content}
-                            </p>
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-              </div>
-            ) : (
-              <div
-                data-ocid="profile.empty_state"
-                className="flex flex-col items-center justify-center py-10 gap-2"
-              >
-                <Grid className="w-8 h-8 text-white/20" />
-                <p className="text-sm text-white/30">No posts yet</p>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="reels" className="mt-0">
-            <div className="grid grid-cols-3 gap-0.5">
-              {REEL_PLACEHOLDERS.map((reel, i) => {
-                const isSelected = lightboxIdx === i + 1000;
-                return (
-                  <button
-                    key={reel.id}
-                    type="button"
-                    data-ocid={`profile.item.${i + 1}`}
-                    onClick={() => setLightboxIdx(isSelected ? null : i + 1000)}
-                    className={`aspect-square bg-gradient-to-br ${reel.gradient} overflow-hidden relative flex items-center justify-center`}
-                    style={
-                      isSelected
-                        ? {
-                            outline: "4px solid rgba(255,255,255,0.6)",
-                            outlineOffset: "-4px",
-                            boxShadow: "inset 0 0 0 2px white",
-                            borderRadius: 12,
-                          }
-                        : {}
-                    }
-                  >
-                    <div className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-                      <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                      : {}
+                  }
+                >
+                  {post.image ? (
+                    <img
+                      src={post.image.getDirectURL()}
+                      alt="Post"
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-pink-900/30 to-purple-900/30 flex items-center justify-center p-2">
+                      <p className="text-xs text-center line-clamp-3 text-white/60">
+                        {post.content}
+                      </p>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </TabsContent>
-        </Tabs>
+                  )}
+                </button>
+              ))}
+          </div>
+        ) : (
+          <div
+            data-ocid="profile.empty_state"
+            className="flex flex-col items-center justify-center py-10 gap-2"
+          >
+            <Grid className="w-8 h-8 text-white/20" />
+            <p className="text-sm text-white/30">No posts yet</p>
+          </div>
+        )}
       </div>
 
       {/* Lightbox */}
@@ -858,6 +790,7 @@ export default function ProfileTab() {
       <AppSettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        initialTab={settingsTab}
       />
       <GiftSheet
         open={giftOpen}
@@ -879,6 +812,38 @@ export default function ProfileTab() {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function ProfileImagesCarousel({ profile }: { profile: Profile | null }) {
+  const entries: Array<{ src: string; label: string }> = [];
+  if (profile?.avatar)
+    entries.push({ src: profile.avatar.getDirectURL(), label: "avatar" });
+  if (profile?.coverPhoto)
+    entries.push({ src: profile.coverPhoto.getDirectURL(), label: "cover" });
+
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="mt-4 shrink-0">
+      <p className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-2 px-1">
+        Photos
+      </p>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        {entries.map((entry) => (
+          <div
+            key={entry.label}
+            className="shrink-0 w-24 h-24 rounded-2xl overflow-hidden border border-white/10"
+          >
+            <img
+              src={entry.src}
+              alt={entry.label}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1319,35 +1284,6 @@ function EditProfileDialog({ profile }: { profile: Profile | null }) {
 }
 
 // ─── Extended Profile Info (reads from backend profile) ─────────────────────
-// -- Animated Thoughts Ticker
-function AnimatedThoughtsTicker({ thoughts }: { thoughts: string }) {
-  if (!thoughts.trim()) return null;
-  const repeated = `${thoughts}   •   ${thoughts}   •   `;
-  return (
-    <div
-      className="mt-2 rounded-xl overflow-hidden"
-      style={{
-        background:
-          "linear-gradient(135deg, rgba(168,85,247,0.12), rgba(236,72,153,0.12))",
-        border: "1px solid rgba(168,85,247,0.2)",
-      }}
-    >
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="text-sm shrink-0">💭</span>
-        <div className="flex-1 overflow-hidden">
-          <div className="sf-marquee-track">
-            <span className="text-xs text-purple-300/90 whitespace-nowrap pr-8">
-              {repeated}
-            </span>
-            <span className="text-xs text-purple-300/90 whitespace-nowrap pr-8">
-              {repeated}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // -- Floating Hobby Bubbles
 function FloatingHobbyBubbles({ hobbies }: { hobbies: string }) {
@@ -1429,7 +1365,6 @@ function ExtendedProfileInfo({ profile }: { profile: Profile | null }) {
 
   return (
     <div className="mt-3 flex flex-col gap-3">
-      {hasThoughts && <AnimatedThoughtsTicker thoughts={profile!.thoughts} />}
       {hasHobbies && <FloatingHobbyBubbles hobbies={profile!.hobbies} />}
       {items.map((item) => (
         <div

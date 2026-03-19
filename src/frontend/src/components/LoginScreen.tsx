@@ -25,9 +25,7 @@ export default function LoginScreen() {
             <Sparkles className="w-10 h-10 text-white" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold font-display gradient-text">
-              Social Fusion
-            </h1>
+            <h1 className="text-4xl font-bold font-display gradient-text">​</h1>
             <p className="text-muted-foreground text-sm mt-1">
               Connect. Share. Discover.
             </p>

@@ -1,61 +1,51 @@
-# Social Fusion v25
+# Social Fusion
 
 ## Current State
-- Discover tab: has header (Discover text + search + bell), story row, Today's Picks auto-scroll, SpotlightSection, TinderSection, QuickReactionRow, OtherProfilesRow
-- Requests tab: shows all users with accept/decline, no spotlight row
-- Matches tab: shows matches grid + tabs (Events, Couples, Activity, Saved)
-- Settings: AppSettingsSheet with theme, privacy, notifications, account sections
-- Chat/Messages: MessagesTab with full chat feature set
-- Others (Profile, Create) screen: no changes needed
+v28 is the last successful build. v29 failed during generation. The app is a comprehensive social/matrimonial app with: Discover tab (header, stories, Tinder cards, Today's Picks, You May Like), Requests tab (Spotlight + requests), Matches tab (grid with online/offline), Chat/Messages tab (full chat with WebRTC calls), Profile tab (settings, biometric lock, privacy, premium). All features from v12-v28 are present.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Discover header: add Love/Heart icon button after search bar (before bell) — opens a "Liked You" panel
-- Discover: show all users' stories in the story row (currently only those with stories shown; ensure ALL registered users appear with add-story or story ring)
-- Discover: Tinder main card stays as-is (already present)
-- Discover: Today's Picks already auto-scrolls — verify and keep
-- Discover: SpotlightSection already auto-scrolls horizontally — verify and keep
-- Requests tab: Add horizontal auto-scrolling Spotlight row at the TOP before the requests list
-- Requests tab: Show ALL pending requests below spotlight (not just a subset)
-- Matches tab: Show ALL matchers as cards in a grid (already mostly done, verify completeness)
-- Discover tab: In TinderSection show ONLY offline/new profiles (filter out recently seen)
-- Tinder card style: Ensure Tinder-inspired full-card style (gradient overlay, name/age/location at bottom, action buttons)
-- Main Tinder profile: multiple send options (Star, Heart, Kiss, Miss You, Thanks, Message) as action row
-- Settings screen: add 10 new fully-working features:
-  1. Notification Settings — granular toggles (matches, messages, story likes, profile views, events) with save button
-  2. Privacy Settings — who can message (Everyone/Matches/Nobody), who can see online status, profile visibility (Public/Private) with save
-  3. Theme selector — visual theme cards grid, instant preview, Save Theme button persists to localStorage
-  4. Chat Settings — who can message, message requests toggle, read receipts, typing indicator
-  5. Account Security — change display name, PIN lock toggle, deactivate option
-  6. Blocked Users — list of blocked users with unblock action
-  7. App Preferences — language, distance unit, auto-translate toggle
-  8. Data & Storage — clear cache button, data usage info
-  9. Profile Boost — toggle boost, schedule boost time
-  10. Help & Support — FAQ, contact support, report bug
-- All settings must have a working Save button that persists state to localStorage
-- Theme change must apply instantly to the full UI when selected/saved
-- Chat settings: who can message (Everyone/Matches/Nobody) must filter chat list
-- Notification settings toggles must control whether notification badges/counts show
+- N/A (rebuild existing v28 to get it working)
 
 ### Modify
-- Discover header: reorder icons as: Discover text | search | heart/love icon | bell
-- AppSettingsSheet: expand with 10 new setting sections (keeping all existing ones)
-- Requests tab: add SpotlightRow at top, make full requests list visible below it
-- Matches tab: ensure all matched users show as cards
-- TinderSection: add offline-only filter (show profiles not in tinderQueue/recent likes as "new" profiles)
+- Re-apply all v29 requested changes that failed:
+  1. Browser/Discover screen: header → all stories (with image/video/music upload, view comments/likes) → Tinder profiles with send options → Today's Picks → You May Like. Vertically scrollable, hidden scrollbar.
+  2. Stories: when adding image/video, actual media shows (not just text). Story owner can see comments/likes.
+  3. Request screen: accepting a request deletes it automatically.
+  4. Calls: real WebRTC calls between two users; callee gets incoming call overlay.
+  5. Matches screen: clicking heart icon sends notification to that user's notification section.
+  6. Gift sending: gift sent in chat screen.
+  7. Remove ♥ symbol from UI (random heart symbol).
+  8. Chat story click: opens story creator (add story), not dummy content.
+  9. Call history: show related user image.
+  10. Chat header: remove wallpaper and theme toggle features.
+  11. Chat bubbles: 70% of screen width for both sender and receiver.
+  12. Remove thumb icon and "swipe up to turn on vanish mode" text.
+  13. Plus icon in chat: send images/video that receiver can see; reactions show on both sides.
+  14. WebRTC voice/video call in chat working properly.
+  15. New message (pencil icon): background transparent, input text white.
+  16. Profile screen: remove theme toggle, remove share option, thoughts not auto-scroll (static), remove Go Premium button, remove mood board, remove Go Live suggestions, only gifts shown in centre, sending gift goes to that user, remove Set Status option, remove QR code.
+  17. Profile screen: add Music, Voice Introduction, Voice Note Story, Refer a Friend, Notification icon.
+  18. Profile screen: Privacy section shows only "Privacy & Membership" (remove other privacy access items).
+  19. Profile screen: uploaded images shown in carousel.
+  20. Profile screen: remove Posts and Reels tab options.
+  21. Profile details: thoughts shown above follow/followers box (not auto-scrolling at top).
+  22. Remove theme options light/dark toggle.
 
 ### Remove
-- Nothing removed
+- N/A
 
 ## Implementation Plan
-1. Update DiscoverTab header to add Heart/Love icon button between search and bell
-2. Update DiscoverTab story row to show ALL users (not just those with stories) as story avatars
-3. Update RequestsTab to add horizontal auto-scrolling SpotlightRow at top
-4. Update MatchesTab to ensure all matchers show as full cards
-5. Update TinderSection to show "offline/new" style filter
-6. Add multiple send options row to Tinder card (Star, Heart, Kiss, Miss You, Thanks, Message)
-7. Expand AppSettingsSheet with 10 new fully-working settings sections with save buttons
-8. All theme changes apply instantly + Save button persists to localStorage
-9. Chat settings: who-can-message filter wired to MessagesTab
-10. Notification settings toggles wired to notification badge visibility
+1. Update DiscoverTab: ensure story row shows all users with real media, fix scroll sequence, hide scrollbar.
+2. Update StoryCreatorSheet: properly embed actual image/video in story data.
+3. Update StoryViewer: show actual media (image/video), show owner's comments/likes panel.
+4. Update RequestsTab: auto-remove accepted requests.
+5. Update call signaling: ensure callee gets incoming overlay via localStorage event.
+6. Update MatchesTab: heart icon triggers notification to matched user.
+7. Update GiftSheet/chat: gift send writes to recipient's chat.
+8. Remove stray ♥ symbol from UI.
+9. Update ChatScreen/MessagesTab: remove wallpaper/theme from header, fix bubble width to 70%, remove thumb/vanish mode, fix reactions to show both sides, fix media send/receive, fix WebRTC calls.
+10. Update new message screen: transparent background, white text input.
+11. Update ProfileTab: remove theme toggle, share, Go Premium, mood board, Go Live suggestions, Set Status, QR code; add Music/Voice Intro/Voice Note Story/Refer a Friend/Notification icon; show only Privacy & Membership in privacy section; carousel for uploaded images; remove posts/reels tabs; thoughts shown above follow/followers (static).
+12. Remove light/dark theme toggle globally.

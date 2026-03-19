@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Principal } from "@icp-sdk/core/principal";
-import { Bell, Heart, Search, Star, X, Zap } from "lucide-react";
+import { Bell, Heart, Mic, Search, Star, Video, X, Zap } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -25,6 +25,7 @@ import {
 } from "../../hooks/useQueries";
 import CompatibilityRing from "../CompatibilityRing";
 import LiveBroadcastScreen from "../LiveBroadcastScreen";
+import LiveScreen from "../LiveScreen";
 import ProfileBadges from "../ProfileBadges";
 import QuickMatchBar from "../QuickMatchBar";
 import SearchScreen from "../SearchScreen";
@@ -230,6 +231,8 @@ interface Props {
   onNotifOpen?: () => void;
   onStoryOpen?: () => void;
   onStoryClose?: () => void;
+  onLiveOpen?: () => void;
+  onLiveClose?: () => void;
 }
 
 interface StoryViewState {
@@ -243,8 +246,14 @@ export default function DiscoverTab({
   onNotifOpen,
   onStoryOpen,
   onStoryClose,
+  onLiveOpen,
+  onLiveClose,
 }: Props) {
   const [showLive, setShowLive] = useState(false);
+  const [liveScreenOpen, setLiveScreenOpen] = useState(false);
+  const [liveMode, setLiveMode] = useState<"audio" | "video">("video");
+  const [showLivePicker, setShowLivePicker] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [storyCreatorOpen, setStoryCreatorOpen] = useState(false);
@@ -295,6 +304,24 @@ export default function DiscoverTab({
     onStoryClose?.();
   };
 
+  // Show LiveScreen overlay when liveScreenOpen
+  if (liveScreenOpen) {
+    return (
+      <LiveScreen
+        mode={liveMode}
+        isHost={true}
+        onEnd={() => {
+          setLiveScreenOpen(false);
+          onLiveClose?.();
+        }}
+        onClose={() => {
+          setLiveScreenOpen(false);
+          onLiveClose?.();
+        }}
+      />
+    );
+  }
+
   if (showLive) {
     return <LiveBroadcastScreen onBack={() => setShowLive(false)} />;
   }
@@ -314,74 +341,187 @@ export default function DiscoverTab({
   return (
     <div
       data-ocid="discover.page"
-      className="flex flex-col h-full"
-      style={{ background: "var(--sf-bg, #0a0a0f)" }}
+      className="flex flex-col h-full overflow-y-auto"
+      style={{
+        background: "var(--sf-bg, #0a0a0f)",
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
     >
-      {/* Top Header Bar */}
+      {/* Top Header Bar - Discover + search icon + heart + bell */}
       <div
-        className="shrink-0 flex items-center gap-2 px-3"
+        className="shrink-0 flex flex-col"
         style={{
-          height: 52,
           background: "rgba(10,10,15,0.97)",
           borderBottom: "1px solid rgba(255,255,255,0.05)",
         }}
       >
-        {/* Left: Discover text */}
-        <span
-          className="text-lg font-black tracking-tight shrink-0"
-          style={{
-            background:
-              "linear-gradient(90deg, #ec4899 0%, #a855f7 50%, #ec4899 100%)",
-            backgroundSize: "200%",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            animation: "gradientMove 3s linear infinite",
-          }}
+        <div
+          className="flex items-center justify-between px-4"
+          style={{ height: 52 }}
         >
-          Discover
-        </span>
-        {/* Center: Live search input */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40 pointer-events-none" />
-          <input
-            type="text"
-            data-ocid="discover.search_input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search people..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-full bg-white/10 text-white text-sm placeholder:text-white/40 outline-none border border-white/10 focus:border-pink-500/50 transition-colors"
-          />
-          {searchQuery && (
+          {/* Left: Discover text */}
+          <h1
+            className="text-xl font-bold"
+            style={{
+              background: "linear-gradient(90deg, #ec4899, #a855f7)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Discover
+          </h1>
+          {/* Right: icons row */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2"
+              data-ocid="discover.search_input"
+              onClick={() => setShowSearchBar((s) => !s)}
+              className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform"
             >
-              <X className="w-3.5 h-3.5 text-white/40" />
+              <Search className="w-4.5 h-4.5 text-white/80" />
             </button>
-          )}
+            <button
+              type="button"
+              data-ocid="discover.toggle"
+              onClick={() => setShowWhoLiked(true)}
+              className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform relative"
+            >
+              <Heart
+                className="w-4.5 h-4.5 text-pink-400"
+                fill="currentColor"
+              />
+            </button>
+            <button
+              type="button"
+              data-ocid="discover.toggle"
+              onClick={() => onNotifOpen?.()}
+              className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform relative"
+            >
+              <Bell className="w-4.5 h-4.5 text-white/70" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
+            </button>
+          </div>
         </div>
-        {/* Heart - Who Liked You */}
-        <button
-          type="button"
-          data-ocid="discover.toggle"
-          onClick={() => setShowWhoLiked(true)}
-          className="w-9 h-9 shrink-0 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform relative"
-        >
-          <Heart className="w-4 h-4 text-pink-400" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
-        </button>
-        {/* Right: Notification bell */}
-        <button
-          type="button"
-          data-ocid="discover.toggle"
-          onClick={() => onNotifOpen?.()}
-          className="w-9 h-9 shrink-0 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform relative"
-        >
-          <Bell className="w-4 h-4 text-white/70" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
-        </button>
+        {/* Expandable search bar with filter */}
+        {showSearchBar && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center gap-2 px-3 pb-2 overflow-hidden"
+          >
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40 pointer-events-none" />
+              <input
+                type="text"
+                data-ocid="discover.search_input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search people..."
+                className="w-full pl-8 pr-3 py-1.5 rounded-full bg-white/10 text-white text-sm placeholder:text-white/40 outline-none border border-white/10 focus:border-pink-500/50 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                >
+                  <X className="w-3.5 h-3.5 text-white/40" />
+                </button>
+              )}
+            </div>
+            {/* Filter icon */}
+            <button
+              type="button"
+              data-ocid="discover.toggle"
+              onClick={() => setShowSearch(true)}
+              className="w-9 h-9 shrink-0 rounded-full bg-white/10 flex items-center justify-center"
+            >
+              <Zap className="w-4 h-4 text-pink-400" />
+            </button>
+          </motion.div>
+        )}
       </div>
+
+      {/* Live mode picker sheet */}
+      {showLivePicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          style={{ background: "rgba(0,0,0,0.7)" }}
+          onClick={() => setShowLivePicker(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowLivePicker(false);
+          }}
+        >
+          <div
+            className="w-full rounded-t-3xl p-6"
+            style={{
+              background: "#1a0a2e",
+              border: "1px solid rgba(236,72,153,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-white font-bold text-lg mb-4 text-center">
+              Go Live
+            </h3>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <button
+                type="button"
+                data-ocid="live.secondary_button"
+                onClick={() => {
+                  setLiveMode("audio");
+                  setShowLivePicker(false);
+                  setLiveScreenOpen(true);
+                  onLiveOpen?.();
+                }}
+                className="flex flex-col items-center gap-3 p-5 rounded-2xl active:scale-95 transition-transform"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(236,72,153,0.3)",
+                }}
+              >
+                <Mic className="w-10 h-10 text-pink-400" />
+                <span className="text-white font-semibold">Audio Live</span>
+                <span className="text-white/40 text-xs text-center">
+                  Share your voice with followers
+                </span>
+              </button>
+              <button
+                type="button"
+                data-ocid="live.primary_button"
+                onClick={() => {
+                  setLiveMode("video");
+                  setShowLivePicker(false);
+                  setLiveScreenOpen(true);
+                  onLiveOpen?.();
+                }}
+                className="flex flex-col items-center gap-3 p-5 rounded-2xl active:scale-95 transition-transform"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(168,85,247,0.3)",
+                }}
+              >
+                <Video className="w-10 h-10 text-purple-400" />
+                <span className="text-white font-semibold">Video Live</span>
+                <span className="text-white/40 text-xs text-center">
+                  Go live with your camera
+                </span>
+              </button>
+            </div>
+            <button
+              data-ocid="live.cancel_button"
+              type="button"
+              onClick={() => setShowLivePicker(false)}
+              className="w-full py-3 text-white/50 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Story row */}
       <div className="px-4 pt-3 pb-2 shrink-0">
@@ -443,115 +583,34 @@ export default function DiscoverTab({
         </div>
       </div>
 
-      {/* Daily Picks section */}
-      {(() => {
-        const { isPrivate } = { isPrivate: (_s: string) => false };
-        void isPrivate;
-        const pickProfiles = (allProfiles ?? [])
-          .filter(([p]) => p.toString() !== myPrincipal?.toString())
-          .slice(0, 5);
-        if (pickProfiles.length === 0) return null;
-        return (
-          <div className="px-4 pb-3 shrink-0">
-            <p
-              className="text-sm font-bold mb-2"
-              style={{
-                background: "linear-gradient(90deg, #ec4899, #a855f7, #ec4899)",
-                backgroundSize: "200%",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Today&apos;s Picks ✨
-            </p>
-            <div
-              ref={picksScrollRef}
-              className="flex gap-3 overflow-x-auto no-scrollbar pb-1"
-            >
-              {pickProfiles.map(([principal, prof]) => {
-                const matchPct = getMatchPercent(
-                  prof,
-                  callerProfile,
-                  principal.toString(),
-                );
-                return (
-                  <button
-                    key={principal.toString()}
-                    type="button"
-                    onClick={() => onUserClick(principal)}
-                    className="shrink-0 flex flex-col items-center gap-1.5 rounded-2xl p-3 active:scale-95 transition-transform"
-                    style={{
-                      width: 130,
-                      background: "rgba(255,255,255,0.04)",
-                      boxShadow:
-                        "0 0 0 1.5px rgba(236,72,153,0.3), 0 4px 16px rgba(168,85,247,0.12)",
-                    }}
-                  >
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-pink-500 to-purple-600">
-                      {prof.avatar ? (
-                        <img
-                          src={prof.avatar.getDirectURL()}
-                          alt={prof.displayName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white font-bold text-lg">
-                          {prof.displayName[0]?.toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-white text-xs font-semibold truncate w-full text-center">
-                      {prof.displayName}
-                    </p>
-                    <p
-                      className="text-xs font-bold"
-                      style={{ color: "#f472b6" }}
-                    >
-                      {matchPct}% Match
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-                      style={{
-                        background: "linear-gradient(135deg, #ec4899, #a855f7)",
-                      }}
-                    >
-                      <Heart className="w-3.5 h-3.5 text-white" />
-                    </button>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      <SpotlightSection
-        profiles={allProfiles ?? []}
-        onUserClick={onUserClick}
-      />
-      {/* Swipe section + Quick Reactions */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-hidden">
-          <TinderSection
-            onUserClick={onUserClick}
-            onLikeSound={playLikeSound}
-            searchQuery={searchQuery}
-          />
-        </div>
-
+      {/* SpotlightSection removed from Discover - shown in Requests only */}
+      {/* Main Tinder Swipe section */}
+      <div className="shrink-0">
+        <TinderSection
+          onUserClick={onUserClick}
+          onLikeSound={playLikeSound}
+          searchQuery={searchQuery}
+        />
         {/* Quick Send Reactions */}
         <QuickReactionRow />
       </div>
 
-      {/* Other Profiles - horizontal scroll */}
-      <OtherProfilesRow
+      {/* Today's Picks - Tinder-style single card */}
+      <TodaysPicksCard
+        profiles={(allProfiles ?? [])
+          .filter(([p]) => p.toString() !== myPrincipal?.toString())
+          .slice(0, 5)}
+        callerProfile={callerProfile ?? undefined}
+        onUserClick={onUserClick}
+      />
+
+      {/* You May Like - horizontal scroll */}
+      <YouMayLikeSection
         profiles={(allProfiles ?? [])
           .filter(([p]) => p.toString() !== myPrincipal?.toString())
           .slice(0, 12)}
+        callerProfile={callerProfile ?? undefined}
         onUserClick={onUserClick}
-        searchQuery={searchQuery}
       />
 
       <StoryCreatorSheet
@@ -653,8 +712,6 @@ function StoryRingAvatarWithStories({
 }) {
   const { data: stories } = useGetStories(principal);
   const count = stories?.length ?? 0;
-  if (count === 0) return null;
-
   const handleClick = () => {
     if (stories && stories.length > 0) {
       onOpenStory(stories);
@@ -694,7 +751,7 @@ function StoryRingAvatarWithStories({
   );
 }
 
-function OtherProfilesRow({
+function _OtherProfilesRow({
   profiles,
   onUserClick,
   searchQuery = "",
@@ -979,6 +1036,267 @@ function ProfileCardCarousel({
             }}
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function TodaysPicksCard({
+  profiles,
+  callerProfile,
+  onUserClick,
+}: {
+  profiles: [import("@icp-sdk/core/principal").Principal, Profile][];
+  callerProfile: Profile | undefined;
+  onUserClick: (p: import("@icp-sdk/core/principal").Principal) => void;
+}) {
+  const [pickIdx, setPickIdx] = useState(0);
+
+  // Auto-advance every 5 seconds
+  useEffect(() => {
+    if (profiles.length === 0) return;
+    const t = setInterval(
+      () => setPickIdx((i) => (i + 1) % profiles.length),
+      5000,
+    );
+    return () => clearInterval(t);
+  }, [profiles.length]);
+
+  if (profiles.length === 0) return null;
+
+  const [principal, prof] = profiles[pickIdx] ?? profiles[0];
+  const matchPct = getMatchPercent(prof, callerProfile, principal.toString());
+
+  return (
+    <div className="shrink-0 px-4 pb-3">
+      <p
+        className="text-sm font-bold mb-2"
+        style={{
+          background: "linear-gradient(90deg, #ec4899, #a855f7)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        }}
+      >
+        Today&apos;s Picks ✨
+      </p>
+      <motion.div
+        key={principal.toString()}
+        className="relative rounded-3xl overflow-hidden cursor-pointer"
+        style={{ height: 320 }}
+        onClick={() => onUserClick(principal)}
+        whileTap={{ scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      >
+        {/* Cover photo */}
+        {prof.avatar ? (
+          <img
+            src={prof.avatar.getDirectURL()}
+            alt={prof.displayName}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="w-full h-full"
+            style={{ background: "linear-gradient(135deg, #ec4899, #a855f7)" }}
+          />
+        )}
+        {/* Deep scrim gradient */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 45%, transparent 70%)",
+          }}
+        />
+        {/* Top row: View Profile chip */}
+        <button
+          type="button"
+          data-ocid="discover.button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUserClick(principal);
+          }}
+          className="absolute top-3 left-3 flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white backdrop-blur-md active:scale-95 transition-transform"
+          style={{
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.25)",
+          }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+          View Profile
+        </button>
+        {/* Info overlay */}
+        <div className="absolute bottom-[72px] left-0 right-0 px-5">
+          <p className="text-white font-bold text-2xl leading-tight tracking-tight">
+            {prof.displayName}
+          </p>
+          {prof.location && (
+            <p className="text-white/60 text-sm mt-0.5">📍 {prof.location}</p>
+          )}
+          <span
+            className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full text-xs font-bold text-white"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(236,72,153,0.9), rgba(168,85,247,0.9))",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            ✨ {matchPct}% Match
+          </span>
+        </div>
+        {/* Bottom action row — Tinder-style */}
+        <div
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-8 px-6 pb-4 pt-2"
+          style={{
+            background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <button
+            type="button"
+            data-ocid="discover.delete_button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPickIdx((i) => (i + 1) % profiles.length);
+            }}
+            className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-transform"
+            style={{
+              background: "rgba(255,255,255,0.12)",
+              border: "2px solid rgba(255,255,255,0.25)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+          <button
+            type="button"
+            data-ocid="discover.primary_button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUserClick(principal);
+              setPickIdx((i) => (i + 1) % profiles.length);
+            }}
+            className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl shadow-pink-500/40 active:scale-90 transition-transform"
+            style={{ background: "linear-gradient(135deg, #ec4899, #a855f7)" }}
+          >
+            <Heart className="w-7 h-7 text-white" fill="white" />
+          </button>
+          <button
+            type="button"
+            data-ocid="discover.secondary_button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPickIdx((i) => (i + 1) % profiles.length);
+            }}
+            className="w-14 h-14 rounded-full flex items-center justify-center shadow-xl active:scale-90 transition-transform"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "2px solid rgba(255,255,255,0.15)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <Star className="w-6 h-6 text-yellow-400" />
+          </button>
+        </div>
+        {/* Dot indicators */}
+        <div className="absolute top-3 right-3 flex gap-1">
+          {profiles.map(([p], i) => (
+            <button
+              key={p.toString()}
+              type="button"
+              onClick={() => setPickIdx(i)}
+              className="rounded-full transition-all"
+              style={{
+                width: i === pickIdx ? 16 : 6,
+                height: 6,
+                background: i === pickIdx ? "#ec4899" : "rgba(255,255,255,0.4)",
+              }}
+            />
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function YouMayLikeSection({
+  profiles,
+  callerProfile,
+  onUserClick,
+}: {
+  profiles: [import("@icp-sdk/core/principal").Principal, Profile][];
+  callerProfile: Profile | undefined;
+  onUserClick: (p: import("@icp-sdk/core/principal").Principal) => void;
+}) {
+  if (profiles.length === 0) return null;
+  return (
+    <div className="shrink-0 pb-2">
+      <div className="px-4 py-1.5 flex items-center justify-between">
+        <p
+          className="text-sm font-bold"
+          style={{
+            background: "linear-gradient(90deg, #ec4899, #a855f7)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          You May Like ✨
+        </p>
+        <span className="text-pink-400 text-xs">{profiles.length} people</span>
+      </div>
+      <div className="flex gap-3 px-4 overflow-x-auto no-scrollbar pb-1">
+        {profiles.map(([principal, prof]) => {
+          const matchPct = getMatchPercent(
+            prof,
+            callerProfile,
+            principal.toString(),
+          );
+          return (
+            <button
+              key={principal.toString()}
+              type="button"
+              data-ocid="discover.button"
+              onClick={() => onUserClick(principal)}
+              className="shrink-0 flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
+              style={{ width: 72 }}
+            >
+              <div className="relative">
+                <div
+                  className="w-14 h-14 rounded-full overflow-hidden"
+                  style={{ border: "2px solid rgba(236,72,153,0.5)" }}
+                >
+                  {prof.avatar ? (
+                    <img
+                      src={prof.avatar.getDirectURL()}
+                      alt={prof.displayName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                      {prof.displayName[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                  style={{
+                    background: "linear-gradient(135deg, #ec4899, #a855f7)",
+                  }}
+                >
+                  <Heart className="w-2.5 h-2.5 text-white" fill="white" />
+                </button>
+              </div>
+              <p className="text-white/70 text-[10px] truncate w-full text-center">
+                {prof.displayName}
+              </p>
+              <p className="text-pink-400 text-[9px] font-bold">{matchPct}%</p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1301,10 +1619,10 @@ function TinderSection({
           </div>
 
           {/* Per-card quick reactions */}
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: stop propagation wrapper */}
           <div
             className="px-3 pb-3 flex gap-1.5 overflow-x-auto no-scrollbar"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             {QUICK_REACTIONS.map((r) => (
               <button

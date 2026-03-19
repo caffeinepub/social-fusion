@@ -7,9 +7,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Camera, Image, Sparkles } from "lucide-react";
+import { Image, Music, Sparkles, Video } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
+import { useCreateStory } from "../hooks/useQueries";
 
 const GRADIENT_OPTIONS = [
   { id: "g1", from: "#ff0080", to: "#7c3aed", label: "Neon" },
@@ -27,20 +28,83 @@ interface Props {
 export default function StoryCreatorSheet({ open, onClose }: Props) {
   const [text, setText] = useState("");
   const [selectedGradient, setSelectedGradient] = useState(GRADIENT_OPTIONS[0]);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewMedia, setPreviewMedia] = useState<{
+    url: string;
+    type: "image" | "video" | "audio";
+    name: string;
+  } | null>(null);
+  const [musicTitle, setMusicTitle] = useState("");
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const createStory = useCreateStory();
+  const [sharing, setSharing] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreviewImage(url);
-  };
+  const handleFileChange =
+    (mediaType: "image" | "video" | "audio") =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      setPreviewMedia({ url, type: mediaType, name: file.name });
+      if (mediaType === "audio") setMusicTitle(file.name);
+    };
 
-  const handleShare = () => {
-    setText("");
-    setPreviewImage(null);
-    onClose();
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      const storyContent =
+        text.trim() ||
+        (previewMedia?.type === "audio"
+          ? `🎵 ${musicTitle || "Audio story"}`
+          : previewMedia?.type === "video"
+            ? "🎬 Video story"
+            : previewMedia?.type === "image"
+              ? "📷 Photo story"
+              : "✨ Story");
+      // Store media as base64 in localStorage for story viewer
+      if (
+        previewMedia &&
+        (previewMedia.type === "image" || previewMedia.type === "video")
+      ) {
+        try {
+          const resp = await fetch(previewMedia.url);
+          const blob = await resp.blob();
+          const reader = new FileReader();
+          const b64 = await new Promise<string>((res) => {
+            reader.onload = (e) => res((e.target?.result as string) ?? "");
+            reader.readAsDataURL(blob);
+          });
+          const mediaTs = Date.now();
+          const key = `sf_story_media_${mediaTs}`;
+          localStorage.setItem(
+            key,
+            JSON.stringify({ type: previewMedia.type, data: b64, ts: mediaTs }),
+          );
+          // Store reference for story viewer
+          const allRefs = JSON.parse(
+            localStorage.getItem("sf_story_media_refs") || "[]",
+          );
+          allRefs.push(key);
+          // Keep only last 20
+          while (allRefs.length > 20) allRefs.shift();
+          localStorage.setItem("sf_story_media_refs", JSON.stringify(allRefs));
+          localStorage.setItem("sf_story_latest_media", key);
+        } catch {}
+      }
+      await createStory.mutateAsync({ content: storyContent, image: null });
+    } catch {
+      // Allow sharing even if backend fails (optimistic)
+    } finally {
+      setSharing(false);
+      setText("");
+      if (previewMedia) {
+        URL.revokeObjectURL(previewMedia.url);
+        setPreviewMedia(null);
+      }
+      setMusicTitle("");
+      onClose();
+    }
   };
 
   return (
@@ -60,18 +124,40 @@ export default function StoryCreatorSheet({ open, onClose }: Props) {
         <div
           className="relative w-full aspect-[9/16] max-h-52 rounded-2xl overflow-hidden mb-4 border border-white/10"
           style={{
-            background: previewImage
-              ? undefined
-              : `linear-gradient(135deg, ${selectedGradient.from}, ${selectedGradient.to})`,
+            background:
+              previewMedia?.type !== "image" && previewMedia?.type !== "video"
+                ? `linear-gradient(135deg, ${selectedGradient.from}, ${selectedGradient.to})`
+                : undefined,
             boxShadow: `0 0 30px ${selectedGradient.from}40`,
           }}
         >
-          {previewImage && (
+          {previewMedia?.type === "image" && (
             <img
-              src={previewImage}
+              src={previewMedia.url}
               alt="Preview"
               className="absolute inset-0 w-full h-full object-cover"
             />
+          )}
+          {previewMedia?.type === "video" && (
+            <video
+              src={previewMedia.url}
+              className="absolute inset-0 w-full h-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          )}
+          {previewMedia?.type === "audio" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <span className="text-5xl">🎵</span>
+              <p className="text-white/70 text-sm text-center px-4 truncate max-w-full">
+                {musicTitle || "Audio Story"}
+              </p>
+              <audio src={previewMedia.url} controls className="h-8 w-36">
+                <track kind="captions" />
+              </audio>
+            </div>
           )}
           {text && (
             <div className="absolute inset-0 flex items-end justify-center pb-6 px-4">
@@ -83,7 +169,7 @@ export default function StoryCreatorSheet({ open, onClose }: Props) {
               </p>
             </div>
           )}
-          {!previewImage && !text && (
+          {!previewMedia && !text && (
             <div className="absolute inset-0 flex items-center justify-center">
               <Sparkles className="w-10 h-10 text-white/30" />
             </div>
@@ -127,13 +213,28 @@ export default function StoryCreatorSheet({ open, onClose }: Props) {
           />
         </div>
 
-        {/* Media buttons */}
-        <div className="flex gap-2 mb-5">
+        {/* Music title (when audio selected) */}
+        {previewMedia?.type === "audio" && (
+          <div className="mb-4">
+            <Label className="text-white/50 text-xs mb-2 block">
+              Music / Audio Title
+            </Label>
+            <Input
+              value={musicTitle}
+              onChange={(e) => setMusicTitle(e.target.value)}
+              placeholder="Song title..."
+              className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
+            />
+          </div>
+        )}
+
+        {/* Media upload buttons */}
+        <div className="grid grid-cols-3 gap-2 mb-5">
           <button
             type="button"
             data-ocid="story.upload_button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-1 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-white/60 text-sm hover:bg-white/10 transition-colors"
+            onClick={() => imageInputRef.current?.click()}
+            className="h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-white/60 text-sm hover:bg-white/10 transition-colors active:scale-95"
           >
             <Image className="w-4 h-4" />
             Photo
@@ -141,33 +242,59 @@ export default function StoryCreatorSheet({ open, onClose }: Props) {
           <button
             type="button"
             data-ocid="story.secondary_button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-1 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-white/60 text-sm hover:bg-white/10 transition-colors"
+            onClick={() => videoInputRef.current?.click()}
+            className="h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-white/60 text-sm hover:bg-white/10 transition-colors active:scale-95"
           >
-            <Camera className="w-4 h-4" />
-            Camera
+            <Video className="w-4 h-4" />
+            Video
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+          <button
+            type="button"
+            data-ocid="story.toggle"
+            onClick={() => audioInputRef.current?.click()}
+            className="h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2 text-white/60 text-sm hover:bg-white/10 transition-colors active:scale-95"
+          >
+            <Music className="w-4 h-4" />
+            Music
+          </button>
         </div>
+
+        {/* Hidden file inputs */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange("image")}
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={handleFileChange("video")}
+        />
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={handleFileChange("audio")}
+        />
 
         {/* Share button */}
         <motion.div whileTap={{ scale: 0.97 }}>
           <Button
             data-ocid="story.submit_button"
             onClick={handleShare}
+            disabled={sharing}
             className="w-full h-12 rounded-2xl text-white font-bold text-base border-0"
             style={{
               background: `linear-gradient(135deg, ${selectedGradient.from}, ${selectedGradient.to})`,
               boxShadow: `0 4px 20px ${selectedGradient.from}60`,
             }}
           >
-            ✨ Share Story
+            {sharing ? "Sharing..." : "✨ Share Story"}
           </Button>
         </motion.div>
       </SheetContent>

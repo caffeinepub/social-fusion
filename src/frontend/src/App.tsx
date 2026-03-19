@@ -2,6 +2,7 @@ import type { Principal } from "@icp-sdk/core/principal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
+import BiometricLockScreen from "./components/BiometricLockScreen";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import CallScreen from "./components/CallScreen";
 import DarkModeFAB from "./components/DarkModeFAB";
@@ -82,10 +83,12 @@ function AppInner() {
 
 function MainApp() {
   const [activeTab, setActiveTab] = useState<Tab>("browse");
+  const [prevTab, setPrevTab] = useState<Tab>("browse");
   const [viewingUser, setViewingUser] = useState<Principal | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
   const [globalCallMode, setGlobalCallMode] = useState<
     "voice" | "video" | null
   >(null);
@@ -94,10 +97,31 @@ function MainApp() {
   >(undefined);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
 
+  // Biometric lock state per tab
+  const [profileUnlocked, setProfileUnlocked] = useState(false);
+  const [chatUnlocked, setChatUnlocked] = useState(false);
+
+  const biometricEnabled =
+    localStorage.getItem("sf_biometric_enabled") === "true";
+
+  const handleTabChange = (tab: Tab) => {
+    // Re-lock when leaving protected tabs
+    if (prevTab !== tab) {
+      if (biometricEnabled) {
+        if (tab !== "profile") setProfileUnlocked(false);
+        if (tab !== "chats") setChatUnlocked(false);
+      }
+    }
+    setPrevTab(activeTab);
+    setActiveTab(tab);
+  };
+
   const { data: allProfiles } = useGetAllProfiles();
+  const { identity } = useInternetIdentity();
+  const myPrincipal = identity?.getPrincipal().toString();
 
   const { incomingCall, broadcastAccept, broadcastReject, clearIncoming } =
-    useCallSignal();
+    useCallSignal(myPrincipal);
 
   const { data: userProfile, isFetched } = useGetCallerProfileForAuth();
   const needsSetup = isFetched && userProfile === null;
@@ -112,6 +136,10 @@ function MainApp() {
 
   const handleUserClick = (p: Principal) => setViewingUser(p);
   const handleBack = () => setViewingUser(null);
+
+  // Only show incoming call to the callee (not the caller)
+  const showIncomingCall =
+    !!incomingCall && incomingCall.callerPrincipal !== myPrincipal;
 
   const handleAcceptIncoming = () => {
     if (!incomingCall) return;
@@ -164,12 +192,12 @@ function MainApp() {
         <main className="flex-1 overflow-hidden">
           <UserProfileView principal={viewingUser} onBack={handleBack} />
         </main>
-        <BottomNav active={activeTab} onChange={setActiveTab} />
-        {incomingCall && (
+        <BottomNav active={activeTab} onChange={handleTabChange} />
+        {showIncomingCall && (
           <IncomingCallOverlay
             profile={(() => {
               const found = allProfiles?.find(
-                ([p]) => p.toString() === incomingCall.callerPrincipal,
+                ([p]) => p.toString() === incomingCall!.callerPrincipal,
               );
               return found
                 ? (found[1] as Parameters<
@@ -177,7 +205,7 @@ function MainApp() {
                   >[0]["profile"])
                 : undefined;
             })()}
-            mode={incomingCall.mode}
+            mode={incomingCall!.mode}
             onAccept={handleAcceptIncoming}
             onReject={handleRejectIncoming}
           />
@@ -186,28 +214,8 @@ function MainApp() {
     );
   }
 
-  const showGlobalHeader = activeTab !== "browse";
-
   return (
     <div className="flex flex-col h-dvh">
-      {showGlobalHeader && (
-        <header
-          className="shrink-0 flex items-center justify-between px-4 bg-[#0a0a0f] border-b border-white/5"
-          style={{ height: 48 }}
-        >
-          <span
-            className="font-display font-bold text-lg"
-            style={{
-              background: "linear-gradient(90deg, #ec4899 0%, #a855f7 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            Social Fusion
-          </span>
-        </header>
-      )}
-
       <main className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
@@ -224,6 +232,8 @@ function MainApp() {
                 onNotifOpen={() => setNotifOpen(true)}
                 onStoryOpen={() => setStoryOpen(true)}
                 onStoryClose={() => setStoryOpen(false)}
+                onLiveOpen={() => setLiveOpen(true)}
+                onLiveClose={() => setLiveOpen(false)}
               />
             )}
             {activeTab === "requests" && (
@@ -235,19 +245,33 @@ function MainApp() {
                 onMessageUser={() => setActiveTab("chats")}
               />
             )}
-            {activeTab === "chats" && (
-              <MessagesTab
-                onChatOpenChange={setChatOpen}
-                onViewProfile={handleUserClick}
-              />
-            )}
-            {activeTab === "profile" && <ProfileTab />}
+            {activeTab === "chats" &&
+              (biometricEnabled && !chatUnlocked ? (
+                <AnimatePresence>
+                  <BiometricLockScreen onUnlock={() => setChatUnlocked(true)} />
+                </AnimatePresence>
+              ) : (
+                <MessagesTab
+                  onChatOpenChange={setChatOpen}
+                  onViewProfile={handleUserClick}
+                />
+              ))}
+            {activeTab === "profile" &&
+              (biometricEnabled && !profileUnlocked ? (
+                <AnimatePresence>
+                  <BiometricLockScreen
+                    onUnlock={() => setProfileUnlocked(true)}
+                  />
+                </AnimatePresence>
+              ) : (
+                <ProfileTab />
+              ))}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {!chatOpen && !storyOpen && (
-        <BottomNav active={activeTab} onChange={setActiveTab} />
+      {!chatOpen && !storyOpen && !liveOpen && (
+        <BottomNav active={activeTab} onChange={handleTabChange} />
       )}
 
       <NotificationsPanel
@@ -260,11 +284,11 @@ function MainApp() {
       />
 
       <DarkModeFAB />
-      {incomingCall && (
+      {showIncomingCall && (
         <IncomingCallOverlay
           profile={(() => {
             const found = allProfiles?.find(
-              ([p]) => p.toString() === incomingCall.callerPrincipal,
+              ([p]) => p.toString() === incomingCall!.callerPrincipal,
             );
             return found
               ? (found[1] as Parameters<
@@ -272,7 +296,7 @@ function MainApp() {
                 >[0]["profile"])
               : undefined;
           })()}
-          mode={incomingCall.mode}
+          mode={incomingCall!.mode}
           onAccept={handleAcceptIncoming}
           onReject={handleRejectIncoming}
         />

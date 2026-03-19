@@ -1,5 +1,6 @@
 import { PhoneOff } from "lucide-react";
 import { motion } from "motion/react";
+import { useEffect, useState } from "react";
 import type { Profile } from "../backend";
 
 interface Props {
@@ -13,6 +14,21 @@ export default function OutgoingCallOverlay({
   mode,
   onCancel,
 }: Props) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Auto-cancel after 30s
+  useEffect(() => {
+    if (elapsed >= 30) onCancel();
+  }, [elapsed, onCancel]);
+
+  const statusText =
+    elapsed < 5 ? "Calling..." : elapsed < 20 ? "Ringing..." : "No answer...";
+
   return (
     <motion.div
       data-ocid="call.modal"
@@ -63,12 +79,14 @@ export default function OutgoingCallOverlay({
             {profile.displayName}
           </h2>
           <motion.p
+            key={statusText}
             className="text-white/50 text-base mt-2"
             animate={{ opacity: [1, 0.4, 1] }}
             transition={{ duration: 1.5, repeat: Number.POSITIVE_INFINITY }}
           >
-            Calling...
+            {statusText}
           </motion.p>
+          <p className="text-white/20 text-xs mt-1">{elapsed}s</p>
         </div>
       </div>
 

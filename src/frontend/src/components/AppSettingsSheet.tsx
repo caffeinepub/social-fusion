@@ -36,6 +36,7 @@ import { useInternetIdentity } from "../hooks/useInternetIdentity";
 interface AppSettingsSheetProps {
   open: boolean;
   onClose: () => void;
+  initialTab?: string;
 }
 
 // Themes are imported from ThemeContext as SF_THEMES
@@ -68,7 +69,11 @@ function applyTheme(bg: string, accent: string) {
   document.documentElement.style.setProperty("--accent-primary", accent);
 }
 
-export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
+export function AppSettingsSheet({
+  open,
+  onClose,
+  initialTab,
+}: AppSettingsSheetProps) {
   const [theme, setTheme] = useState(() => loadSetting("sf_theme", "dark"));
   const [accent, setAccent] = useState(() =>
     loadSetting("sf_accent", "#ec4899"),
@@ -388,7 +393,7 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
             </div>
 
             <Tabs
-              defaultValue="customize"
+              defaultValue={initialTab ?? "customize"}
               className="flex-1 flex flex-col min-h-0"
             >
               <TabsList className="mx-4 mt-3 shrink-0 grid grid-cols-6 bg-white/5 h-10">
@@ -1123,9 +1128,9 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                   <div className="mt-2 flex items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl">
                     <Info className="w-4 h-4 text-white/30" />
                     <div>
-                      <p className="text-white/50 text-xs">Social Fusion</p>
+                      <p className="text-white/50 text-xs">v28.0.0</p>
                       <p className="text-white/30 text-[10px]">
-                        Version 14.0.0 · Built with caffeine.ai
+                        Built with caffeine.ai
                       </p>
                     </div>
                   </div>
@@ -1916,7 +1921,7 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                       </button>
                     </div>
                     <p className="text-white/20 text-[10px] text-center mt-3">
-                      Social Fusion v25.0
+                      v28.0
                     </p>
                   </div>
                 </div>

@@ -127,12 +127,34 @@ export default function UserProfileView({
   };
 
   const handleCallClick = (mode: "voice" | "video") => {
+    // Show outgoing overlay immediately to caller
     setOutgoingCall(mode);
-    if (myPrincipal) broadcastCall(myPrincipal.toString(), mode);
-    setTimeout(() => {
-      setOutgoingCall(null);
-      setCallMode(mode);
-    }, 3000);
+    // Broadcast incoming signal to callee (other tabs)
+    if (myPrincipal) {
+      const callId = broadcastCall(
+        principal.toString(),
+        mode,
+        myPrincipal.toString(),
+      );
+      // Listen for accepted/rejected
+      const channel = new BroadcastChannel("social-fusion-calls");
+      const timeout = setTimeout(() => {
+        channel.close();
+        setOutgoingCall(null);
+      }, 30000);
+      channel.onmessage = (evt: MessageEvent) => {
+        const signal = evt.data;
+        if (signal.callId === callId) {
+          clearTimeout(timeout);
+          channel.close();
+          setOutgoingCall(null);
+          if (signal.type === "accepted") {
+            setCallMode(mode);
+          }
+          // If rejected, outgoing overlay just closes (no toast)
+        }
+      };
+    }
   };
 
   const handleStar = async () => {

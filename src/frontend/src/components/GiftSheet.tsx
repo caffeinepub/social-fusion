@@ -5,6 +5,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   recipientName?: string;
+  onSend?: (gift: { emoji: string; name: string; coins: number }) => void;
 }
 
 const GIFTS = [
@@ -22,8 +23,10 @@ export default function GiftSheet({
   open,
   onClose,
   recipientName = "them",
+  onSend,
 }: Props) {
-  const handleSend = (_gift: (typeof GIFTS)[0]) => {
+  const handleSend = (gift: (typeof GIFTS)[0]) => {
+    onSend?.(gift);
     onClose();
   };
 
