@@ -255,13 +255,13 @@ export default function DiscoverTab({
   const { data: myStories } = useGetStories(myPrincipal);
   const { data: allProfiles } = useGetAllProfiles();
   const [_shakeName, _setShakeName] = useState<string | null>(null);
+  const [showWhoLiked, setShowWhoLiked] = useState(false);
 
   const myStoryCount = myStories?.length ?? 0;
 
   const otherUsersWithStories =
-    allProfiles
-      ?.filter(([p]) => p.toString() !== myPrincipal?.toString())
-      .slice(0, 6) ?? [];
+    allProfiles?.filter(([p]) => p.toString() !== myPrincipal?.toString()) ??
+    [];
 
   const picksScrollRef = useRef<HTMLDivElement>(null);
 
@@ -361,6 +361,16 @@ export default function DiscoverTab({
             </button>
           )}
         </div>
+        {/* Heart - Who Liked You */}
+        <button
+          type="button"
+          data-ocid="discover.toggle"
+          onClick={() => setShowWhoLiked(true)}
+          className="w-9 h-9 shrink-0 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-transform relative"
+        >
+          <Heart className="w-4 h-4 text-pink-400" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
+        </button>
         {/* Right: Notification bell */}
         <button
           type="button"
@@ -551,6 +561,71 @@ export default function DiscoverTab({
 
       {/* Story Viewer */}
       <AnimatePresence>
+        {/* Who Liked You Panel */}
+        {showWhoLiked && (
+          <div className="fixed inset-0 z-50 flex items-end">
+            <button
+              type="button"
+              aria-label="Close who liked panel"
+              className="absolute inset-0 w-full h-full bg-transparent border-0"
+              onClick={() => setShowWhoLiked(false)}
+              onKeyDown={(e) => e.key === "Escape" && setShowWhoLiked(false)}
+            />
+            <div
+              className="relative w-full rounded-t-3xl p-5 pb-10"
+              style={{
+                background: "#13131f",
+                borderTop: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <div className="flex justify-center mb-3">
+                <div className="w-10 h-1 rounded-full bg-white/20" />
+              </div>
+              <div className="flex items-center gap-2 mb-4">
+                <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
+                <h3 className="text-white font-bold text-lg">Who Liked You</h3>
+                <span className="ml-auto text-pink-400/60 text-xs">
+                  {allProfiles?.length ?? 0} people
+                </span>
+              </div>
+              <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                {(allProfiles ?? [])
+                  .filter(([p]) => p.toString() !== myPrincipal?.toString())
+                  .map(([p, prof]) => (
+                    <button
+                      key={p.toString()}
+                      type="button"
+                      onClick={() => {
+                        setShowWhoLiked(false);
+                        onUserClick(p);
+                      }}
+                      className="shrink-0 flex flex-col items-center gap-2"
+                    >
+                      <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-pink-500/50">
+                        {prof.avatar ? (
+                          <img
+                            src={prof.avatar.getDirectURL()}
+                            alt={prof.displayName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                            {prof.displayName[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-pink-500/20">
+                          <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
+                        </div>
+                      </div>
+                      <span className="text-white/70 text-xs w-16 text-center truncate">
+                        {prof.displayName}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
         {storyView && (
           <StoryViewer
             stories={storyView.stories}
@@ -1158,6 +1233,15 @@ function TinderSection({
         whileTap={{ scale: 0.98 }}
       >
         {heartBurst && <HeartBurst onDone={() => setHeartBurst(false)} />}
+        {/* New badge */}
+        <div className="absolute top-3 left-3 z-20 pointer-events-none">
+          <span
+            className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+          >
+            ● New
+          </span>
+        </div>
         {/* Like/Pass overlays */}
         <motion.div
           style={{ opacity: likeOpacity }}
@@ -1253,6 +1337,48 @@ function TinderSection({
         }}
         onBoost={() => {}}
       />
+      {/* Multiple Send Options */}
+      <div className="px-3 pt-1 pb-2">
+        <p className="text-white/30 text-[10px] text-center mb-1.5 font-medium uppercase tracking-widest">
+          Send a vibe
+        </p>
+        <div className="flex gap-2 justify-center flex-wrap">
+          {(
+            [
+              { emoji: "⭐", label: "Star", action: "star" },
+              { emoji: "❤️", label: "Heart", action: "heart" },
+              { emoji: "💋", label: "Kiss", action: "kiss" },
+              { emoji: "😢", label: "Miss You", action: "miss" },
+              { emoji: "🙏", label: "Thanks", action: "thanks" },
+              { emoji: "💬", label: "Message", action: "msg" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.action}
+              type="button"
+              data-ocid="discover.button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (opt.action === "star") {
+                  handleStar();
+                } else if (opt.action === "heart") {
+                  handleLike();
+                } else {
+                  handleCardReaction(opt.emoji);
+                }
+              }}
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl active:scale-90 transition-all"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <span className="text-base">{opt.emoji}</span>
+              <span className="text-white/40 text-[9px]">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Action buttons (legacy) - hidden */}
       <div className="hidden flex items-center gap-4">
         <button

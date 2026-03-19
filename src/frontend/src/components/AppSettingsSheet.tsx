@@ -152,6 +152,99 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
     loadSetting("adv_actStatus", "Everyone"),
   );
   const [dataSheetOpen, setDataSheetOpen] = useState(false);
+  // ── New settings state ──
+  // Notification settings (sf_notif_settings)
+  const [notifSaveState, setNotifSaveState] = useState<"idle" | "saved">(
+    "idle",
+  );
+  const [notifMatchesNew, setNotifMatchesNew] = useState(
+    () => loadSetting("sf_notif_settings", { matches: true }).matches ?? true,
+  );
+  const [notifNewMessages, setNotifNewMessages] = useState(
+    () =>
+      loadSetting("sf_notif_settings", { newMessages: true }).newMessages ??
+      true,
+  );
+  const [notifStoryLikes, setNotifStoryLikes] = useState(
+    () =>
+      loadSetting("sf_notif_settings", { storyLikes: true }).storyLikes ?? true,
+  );
+  const [notifProfileViews, setNotifProfileViews] = useState(
+    () =>
+      loadSetting("sf_notif_settings", { profileViews: false }).profileViews ??
+      false,
+  );
+  const [notifEventInvites, setNotifEventInvites] = useState(
+    () =>
+      loadSetting("sf_notif_settings", { eventInvites: true }).eventInvites ??
+      true,
+  );
+  // Privacy settings (sf_privacy_settings)
+  const [privSaveState, setPrivSaveState] = useState<"idle" | "saved">("idle");
+  // Chat settings (sf_chat_settings)
+  const [chatWhoCanMsg, setChatWhoCanMsg] = useState<string>(
+    () =>
+      loadSetting("sf_chat_settings", { whoCanMessage: "everyone" })
+        .whoCanMessage ?? "everyone",
+  );
+  const [chatReadReceipts, setChatReadReceipts] = useState(
+    () =>
+      loadSetting("sf_chat_settings", { showReadReceipts: true })
+        .showReadReceipts ?? true,
+  );
+  const [chatTypingIndicator, setChatTypingIndicator] = useState(
+    () =>
+      loadSetting("sf_chat_settings", { showTypingIndicator: true })
+        .showTypingIndicator ?? true,
+  );
+  const [chatMsgApproval, setChatMsgApproval] = useState(
+    () =>
+      loadSetting("sf_chat_settings", { requireMessageApproval: false })
+        .requireMessageApproval ?? false,
+  );
+  const [chatSaveState, setChatSaveState] = useState<"idle" | "saved">("idle");
+  // App Preferences (sf_app_prefs)
+  const [prefLanguage, setPrefLanguage] = useState(
+    () =>
+      loadSetting("sf_app_prefs", { language: "English" }).language ??
+      "English",
+  );
+  const [prefDistUnit, setPrefDistUnit] = useState(
+    () => loadSetting("sf_app_prefs", { distUnit: "km" }).distUnit ?? "km",
+  );
+  const [prefAutoTrans, setPrefAutoTrans] = useState(
+    () =>
+      loadSetting("sf_app_prefs", { autoTranslate: false }).autoTranslate ??
+      false,
+  );
+  const [prefSaveState, setPrefSaveState] = useState<"idle" | "saved">("idle");
+  // Boost settings (sf_boost_settings)
+  const [boostOn, setBoostOn] = useState(
+    () => loadSetting("sf_boost_settings", { boost: false }).boost ?? false,
+  );
+  const [boostSchedule, setBoostSchedule] = useState<string>(
+    () =>
+      loadSetting("sf_boost_settings", { schedule: "Morning" }).schedule ??
+      "Morning",
+  );
+  const [boostDuration, setBoostDuration] = useState<string>(
+    () =>
+      loadSetting("sf_boost_settings", { duration: "1 hour" }).duration ??
+      "1 hour",
+  );
+  const [boostSaveState, setBoostSaveState] = useState<"idle" | "saved">(
+    "idle",
+  );
+  // Theme save state
+  const [themeSaveState, setThemeSaveState] = useState<"idle" | "saved">(
+    "idle",
+  );
+  // Account display name
+  const [displayNameInput, setDisplayNameInput] = useState("");
+  // Data & storage clear state
+  const [cacheCleared, setCacheCleared] = useState(false);
+  // FAQ open
+  const [openFaq, setOpenFaq] = useState<string | null>(null);
   const [appLock, setAppLock] = useState(() =>
     loadSetting("adv_appLock", false),
   );
@@ -298,7 +391,7 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
               defaultValue="customize"
               className="flex-1 flex flex-col min-h-0"
             >
-              <TabsList className="mx-4 mt-3 shrink-0 grid grid-cols-5 bg-white/5 h-10">
+              <TabsList className="mx-4 mt-3 shrink-0 grid grid-cols-6 bg-white/5 h-10">
                 <TabsTrigger value="customize" className="text-[10px] px-0.5">
                   <Palette className="w-3 h-3 mr-0.5" />
                   Theme
@@ -313,6 +406,10 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                 >
                   <Bell className="w-3 h-3 mr-0.5" />
                   Notifs
+                </TabsTrigger>
+                <TabsTrigger value="chat" className="text-[10px] px-0.5">
+                  <MessageSquare className="w-3 h-3 mr-0.5" />
+                  Chat
                 </TabsTrigger>
                 <TabsTrigger value="account" className="text-[10px] px-0.5">
                   <User className="w-3 h-3 mr-0.5" />
@@ -365,6 +462,28 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                       ))}
                     </div>
                   </div>
+
+                  {/* Save Theme Button */}
+                  <button
+                    type="button"
+                    data-ocid="settings.save_button"
+                    onClick={() => {
+                      saveSetting("sf_theme", theme);
+                      setThemeSaveState("saved");
+                      setTimeout(() => setThemeSaveState("idle"), 2000);
+                    }}
+                    className="w-full py-2.5 rounded-xl text-white font-semibold text-sm mb-4 transition-all"
+                    style={{
+                      background:
+                        themeSaveState === "saved"
+                          ? "linear-gradient(135deg,#10b981,#059669)"
+                          : "linear-gradient(135deg,#ec4899,#a855f7)",
+                    }}
+                  >
+                    {themeSaveState === "saved"
+                      ? "✓ Theme Saved!"
+                      : "Save Theme"}
+                  </button>
 
                   {/* Accent Color */}
                   <div className="mb-5">
@@ -698,6 +817,36 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                     </button>
                   </div>
                 </div>
+                {/* Save Privacy Settings Button */}
+                <button
+                  type="button"
+                  data-ocid="settings.save_button"
+                  onClick={() => {
+                    saveSetting("sf_privacy_settings", {
+                      profileVisibility,
+                      whoCanMessage,
+                      showOnlineStatus: showLastSeen,
+                    });
+                    try {
+                      window.dispatchEvent(
+                        new CustomEvent("sf:privacy-changed"),
+                      );
+                    } catch {}
+                    setPrivSaveState("saved");
+                    setTimeout(() => setPrivSaveState("idle"), 2000);
+                  }}
+                  className="mt-4 w-full py-3 rounded-2xl text-white font-semibold text-sm transition-all"
+                  style={{
+                    background:
+                      privSaveState === "saved"
+                        ? "linear-gradient(135deg,#10b981,#059669)"
+                        : "linear-gradient(135deg,#ec4899,#a855f7)",
+                  }}
+                >
+                  {privSaveState === "saved"
+                    ? "✓ Saved!"
+                    : "Save Privacy Settings"}
+                </button>
               </TabsContent>
 
               {/* Notifications Tab */}
@@ -749,6 +898,177 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                       onChange={(v) => setNotifSuperLikes(v)}
                     />
                   </div>
+                </div>
+                {/* Save Notifications Button */}
+                <button
+                  type="button"
+                  data-ocid="settings.save_button"
+                  onClick={() => {
+                    saveSetting("sf_notif_settings", {
+                      matches: notifMatchesNew,
+                      newMessages: notifNewMessages,
+                      storyLikes: notifStoryLikes,
+                      profileViews: notifProfileViews,
+                      eventInvites: notifEventInvites,
+                    });
+                    saveSetting("sf_notif_matches", notifMatchesNew);
+                    saveSetting("sf_notif_messages", notifNewMessages);
+                    setNotifSaveState("saved");
+                    setTimeout(() => setNotifSaveState("idle"), 2000);
+                  }}
+                  className="mt-4 w-full py-3 rounded-2xl text-white font-semibold text-sm transition-all"
+                  style={{
+                    background:
+                      notifSaveState === "saved"
+                        ? "linear-gradient(135deg,#10b981,#059669)"
+                        : "linear-gradient(135deg,#ec4899,#a855f7)",
+                  }}
+                >
+                  {notifSaveState === "saved"
+                    ? "✓ Saved!"
+                    : "Save Notification Settings"}
+                </button>
+                {/* Additional granular notif toggles */}
+                <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-white/50 text-xs font-semibold mb-3 uppercase tracking-wider">
+                    Granular Controls
+                  </p>
+                  {[
+                    {
+                      label: "Matches",
+                      value: notifMatchesNew,
+                      onChange: setNotifMatchesNew,
+                    },
+                    {
+                      label: "New Messages",
+                      value: notifNewMessages,
+                      onChange: setNotifNewMessages,
+                    },
+                    {
+                      label: "Story Likes",
+                      value: notifStoryLikes,
+                      onChange: setNotifStoryLikes,
+                    },
+                    {
+                      label: "Profile Views",
+                      value: notifProfileViews,
+                      onChange: setNotifProfileViews,
+                    },
+                    {
+                      label: "Event Invites",
+                      value: notifEventInvites,
+                      onChange: setNotifEventInvites,
+                    },
+                  ].map(({ label, value, onChange }) => (
+                    <div
+                      key={label}
+                      className="flex items-center justify-between py-2 border-b border-white/5 last:border-0"
+                    >
+                      <span className="text-white/80 text-sm">{label}</span>
+                      <Switch checked={value} onCheckedChange={onChange} />
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              {/* Chat Tab */}
+              <TabsContent
+                value="chat"
+                className="flex-1 overflow-y-auto px-4 pb-8"
+              >
+                <div className="mt-4">
+                  <p className="text-white/40 text-xs uppercase tracking-wider font-semibold mb-3">
+                    Chat Privacy
+                  </p>
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 mb-3">
+                    <p className="text-white/60 text-xs mb-2">
+                      Who can message me
+                    </p>
+                    <div className="flex gap-2">
+                      {["everyone", "matchesOnly", "nobody"].map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setChatWhoCanMsg(opt)}
+                          className="flex-1 py-2 rounded-full text-xs font-medium transition-all"
+                          style={
+                            chatWhoCanMsg === opt
+                              ? {
+                                  background:
+                                    "linear-gradient(to right, #ec4899, #a855f7)",
+                                  color: "white",
+                                }
+                              : {
+                                  background: "rgba(255,255,255,0.05)",
+                                  color: "rgba(255,255,255,0.5)",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                }
+                          }
+                        >
+                          {opt === "matchesOnly"
+                            ? "Matches"
+                            : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {[
+                    {
+                      label: "Show Read Receipts",
+                      desc: "Let others know when you read their messages",
+                      value: chatReadReceipts,
+                      onChange: setChatReadReceipts,
+                    },
+                    {
+                      label: "Typing Indicator",
+                      desc: "Show when you're typing a reply",
+                      value: chatTypingIndicator,
+                      onChange: setChatTypingIndicator,
+                    },
+                    {
+                      label: "Message Request Approval",
+                      desc: "Strangers go to pending before chatting",
+                      value: chatMsgApproval,
+                      onChange: setChatMsgApproval,
+                    },
+                  ].map(({ label, desc, value, onChange }) => (
+                    <div
+                      key={label}
+                      className="flex items-center justify-between py-3 border-b border-white/5"
+                    >
+                      <div>
+                        <p className="text-white/90 text-sm">{label}</p>
+                        <p className="text-white/30 text-xs mt-0.5">{desc}</p>
+                      </div>
+                      <Switch checked={value} onCheckedChange={onChange} />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    data-ocid="settings.save_button"
+                    onClick={() => {
+                      saveSetting("sf_chat_settings", {
+                        whoCanMessage: chatWhoCanMsg,
+                        showReadReceipts: chatReadReceipts,
+                        showTypingIndicator: chatTypingIndicator,
+                        requireMessageApproval: chatMsgApproval,
+                      });
+                      saveSetting("sf_who_message", chatWhoCanMsg);
+                      setChatSaveState("saved");
+                      setTimeout(() => setChatSaveState("idle"), 2000);
+                    }}
+                    className="mt-4 w-full py-3 rounded-2xl text-white font-semibold text-sm transition-all"
+                    style={{
+                      background:
+                        chatSaveState === "saved"
+                          ? "linear-gradient(135deg,#10b981,#059669)"
+                          : "linear-gradient(135deg,#ec4899,#a855f7)",
+                    }}
+                  >
+                    {chatSaveState === "saved"
+                      ? "✓ Saved!"
+                      : "Save Chat Settings"}
+                  </button>
                 </div>
               </TabsContent>
 
@@ -1195,12 +1515,19 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                         type="button"
                         data-ocid="settings.delete_button"
                         onClick={() => {
-                          localStorage.clear();
+                          const keys = Object.keys(localStorage).filter(
+                            (k) =>
+                              !k.startsWith("principal") &&
+                              !k.startsWith("delegation"),
+                          );
+                          for (const k of keys) localStorage.removeItem(k);
+                          setCacheCleared(true);
                           setDataSheetOpen(false);
+                          setTimeout(() => setCacheCleared(false), 3000);
                         }}
                         className="w-full py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-medium"
                       >
-                        Clear All Cache
+                        {cacheCleared ? "✓ Cache Cleared!" : "Clear All Cache"}
                       </button>
                       <button
                         type="button"
@@ -1275,6 +1602,322 @@ export function AppSettingsSheet({ open, onClose }: AppSettingsSheetProps) {
                         )}
                       </div>
                     )}
+                  </div>
+                  {/* ── BLOCKED USERS ── */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <ShieldOff className="w-4 h-4 text-red-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        Blocked Users
+                      </p>
+                    </div>
+                    <p className="text-white/30 text-xs text-center py-3">
+                      No blocked users
+                    </p>
+                  </div>
+
+                  {/* ── APP PREFERENCES ── */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Globe className="w-4 h-4 text-blue-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        App Preferences
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-white/50 text-xs mb-1.5">Language</p>
+                      <select
+                        value={prefLanguage}
+                        onChange={(e) => setPrefLanguage(e.target.value)}
+                        className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-2 outline-none border border-white/10"
+                      >
+                        {[
+                          "English",
+                          "Hindi",
+                          "Spanish",
+                          "French",
+                          "Arabic",
+                        ].map((l) => (
+                          <option key={l} value={l}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <p className="text-white/70 text-sm">Distance Unit</p>
+                      <div className="flex gap-1">
+                        {["km", "miles"].map((u) => (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => setPrefDistUnit(u)}
+                            className="px-3 py-1 rounded-full text-xs font-medium"
+                            style={
+                              prefDistUnit === u
+                                ? {
+                                    background:
+                                      "linear-gradient(to right,#ec4899,#a855f7)",
+                                    color: "white",
+                                  }
+                                : {
+                                    background: "rgba(255,255,255,0.05)",
+                                    color: "rgba(255,255,255,0.4)",
+                                    border: "1px solid rgba(255,255,255,0.1)",
+                                  }
+                            }
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-t border-white/5">
+                      <div>
+                        <p className="text-white/70 text-sm">Auto-Translate</p>
+                        <p className="text-white/30 text-xs">
+                          Translate incoming messages
+                        </p>
+                      </div>
+                      <Switch
+                        checked={prefAutoTrans}
+                        onCheckedChange={setPrefAutoTrans}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      data-ocid="settings.save_button"
+                      onClick={() => {
+                        saveSetting("sf_app_prefs", {
+                          language: prefLanguage,
+                          distUnit: prefDistUnit,
+                          autoTranslate: prefAutoTrans,
+                        });
+                        setPrefSaveState("saved");
+                        setTimeout(() => setPrefSaveState("idle"), 2000);
+                      }}
+                      className="mt-2 w-full py-2 rounded-xl text-white text-xs font-semibold transition-all"
+                      style={{
+                        background:
+                          prefSaveState === "saved"
+                            ? "linear-gradient(135deg,#10b981,#059669)"
+                            : "linear-gradient(135deg,#ec4899,#a855f7)",
+                      }}
+                    >
+                      {prefSaveState === "saved"
+                        ? "✓ Saved!"
+                        : "Save Preferences"}
+                    </button>
+                  </div>
+
+                  {/* ── PROFILE BOOST ── */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap className="w-4 h-4 text-yellow-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        Profile Boost
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-white/5">
+                      <p className="text-white/70 text-sm">Enable Boost</p>
+                      <Switch checked={boostOn} onCheckedChange={setBoostOn} />
+                    </div>
+                    {boostOn && (
+                      <>
+                        <div className="mt-2 mb-2">
+                          <p className="text-white/50 text-xs mb-1.5">
+                            Schedule
+                          </p>
+                          <div className="flex gap-1">
+                            {["Morning", "Evening", "Night"].map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setBoostSchedule(s)}
+                                className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                                style={
+                                  boostSchedule === s
+                                    ? {
+                                        background:
+                                          "linear-gradient(to right,#ec4899,#a855f7)",
+                                        color: "white",
+                                      }
+                                    : {
+                                        background: "rgba(255,255,255,0.05)",
+                                        color: "rgba(255,255,255,0.4)",
+                                        border:
+                                          "1px solid rgba(255,255,255,0.1)",
+                                      }
+                                }
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-white/50 text-xs mb-1.5">
+                            Duration
+                          </p>
+                          <div className="flex gap-1">
+                            {["1 hour", "3 hours", "6 hours"].map((d) => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => setBoostDuration(d)}
+                                className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                                style={
+                                  boostDuration === d
+                                    ? {
+                                        background:
+                                          "linear-gradient(to right,#ec4899,#a855f7)",
+                                        color: "white",
+                                      }
+                                    : {
+                                        background: "rgba(255,255,255,0.05)",
+                                        color: "rgba(255,255,255,0.4)",
+                                        border:
+                                          "1px solid rgba(255,255,255,0.1)",
+                                      }
+                                }
+                              >
+                                {d}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      data-ocid="settings.save_button"
+                      onClick={() => {
+                        saveSetting("sf_boost_settings", {
+                          boost: boostOn,
+                          schedule: boostSchedule,
+                          duration: boostDuration,
+                        });
+                        setBoostSaveState("saved");
+                        setTimeout(() => setBoostSaveState("idle"), 2000);
+                      }}
+                      className="mt-3 w-full py-2 rounded-xl text-white text-xs font-semibold transition-all"
+                      style={{
+                        background:
+                          boostSaveState === "saved"
+                            ? "linear-gradient(135deg,#10b981,#059669)"
+                            : "linear-gradient(135deg,#ec4899,#a855f7)",
+                      }}
+                    >
+                      {boostSaveState === "saved"
+                        ? "✓ Saved!"
+                        : "Save Boost Settings"}
+                    </button>
+                  </div>
+
+                  {/* ── ACCOUNT SECURITY ── */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <KeyRound className="w-4 h-4 text-amber-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        Account Security
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <p className="text-white/50 text-xs mb-1">Display Name</p>
+                      <input
+                        type="text"
+                        value={displayNameInput}
+                        onChange={(e) => setDisplayNameInput(e.target.value)}
+                        placeholder="Enter new display name..."
+                        className="w-full bg-white/10 text-white text-sm rounded-xl px-3 py-2 outline-none border border-white/10 focus:border-pink-500/50"
+                      />
+                    </div>
+                    {displayNameInput.length > 0 && (
+                      <button
+                        type="button"
+                        data-ocid="settings.save_button"
+                        onClick={() => {
+                          saveSetting("sf_account_settings", {
+                            displayName: displayNameInput,
+                          });
+                          setDisplayNameInput("");
+                        }}
+                        className="w-full py-2 rounded-xl text-white text-xs font-semibold mb-2"
+                        style={{
+                          background: "linear-gradient(135deg,#ec4899,#a855f7)",
+                        }}
+                      >
+                        Save Name
+                      </button>
+                    )}
+                  </div>
+
+                  {/* ── HELP & SUPPORT ── */}
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2 mb-3">
+                      <HelpCircle className="w-4 h-4 text-blue-400" />
+                      <p className="text-white/80 text-sm font-medium">
+                        Help & Support
+                      </p>
+                    </div>
+                    {[
+                      {
+                        q: "How does matching work?",
+                        a: "We use a smart algorithm based on your interests, location, and behavior to suggest compatible profiles.",
+                      },
+                      {
+                        q: "How to delete account?",
+                        a: "Go to Account tab → Danger Zone → Delete Account. This action is permanent.",
+                      },
+                      {
+                        q: "Is my data private?",
+                        a: "Yes. Your data is stored on the Internet Computer blockchain and only you control access.",
+                      },
+                      {
+                        q: "How to upgrade to Premium?",
+                        a: "Tap your profile → Go Premium → Choose Gold or Diamond plan.",
+                      },
+                    ].map(({ q, a }) => (
+                      <div
+                        key={q}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setOpenFaq(openFaq === q ? null : q)}
+                          className="w-full flex items-center justify-between py-2.5 text-left"
+                        >
+                          <span className="text-white/80 text-sm">{q}</span>
+                          <span className="text-white/40 text-sm">
+                            {openFaq === q ? "−" : "+"}
+                          </span>
+                        </button>
+                        {openFaq === q && (
+                          <p className="text-white/40 text-xs pb-2 leading-relaxed">
+                            {a}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        type="button"
+                        data-ocid="settings.button"
+                        className="flex-1 py-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300 text-xs font-medium"
+                      >
+                        Contact Support
+                      </button>
+                      <button
+                        type="button"
+                        data-ocid="settings.button"
+                        className="flex-1 py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 text-xs font-medium"
+                      >
+                        Report a Bug
+                      </button>
+                    </div>
+                    <p className="text-white/20 text-[10px] text-center mt-3">
+                      Social Fusion v25.0
+                    </p>
                   </div>
                 </div>
               </TabsContent>

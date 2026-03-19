@@ -268,10 +268,27 @@ function ConversationList({
         !blockedSet.has(p.toString()),
     ) ?? [];
 
+  // Read chat privacy setting
+  const chatPrivacy = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("sf_chat_settings") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const whoCanMessage: string = chatPrivacy.whoCanMessage ?? "everyone";
+
   const friendUsers = otherUsers.filter(([p]) => friendSet.has(p.toString()));
-  const otherNonFriends = otherUsers.filter(
+  const otherNonFriendsAll = otherUsers.filter(
     ([p]) => !friendSet.has(p.toString()),
   );
+  // Apply whoCanMessage filter
+  const otherNonFriends =
+    whoCanMessage === "nobody"
+      ? []
+      : whoCanMessage === "matchesOnly"
+        ? [] // only friends/matches visible
+        : otherNonFriendsAll;
 
   return (
     <>

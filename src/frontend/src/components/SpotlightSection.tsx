@@ -1,7 +1,7 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import { Crown } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../backend";
 
 interface Props {
@@ -11,11 +11,13 @@ interface Props {
 
 export default function SpotlightSection({ profiles, onUserClick }: Props) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const premiumProfiles = profiles
     .filter((_, i) => i % 3 === 0 || i < 3)
     .slice(0, 8);
 
+  // Active index cycle for golden highlight
   useEffect(() => {
     if (premiumProfiles.length === 0) return;
     const t = setInterval(() => {
@@ -23,6 +25,22 @@ export default function SpotlightSection({ profiles, onUserClick }: Props) {
     }, 3000);
     return () => clearInterval(t);
   }, [premiumProfiles.length]);
+
+  // Auto-scroll horizontally every 3s
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const t = setInterval(() => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
+      if (el.scrollLeft >= maxScroll - 5) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollBy({ left: 80, behavior: "smooth" });
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
 
   if (premiumProfiles.length === 0) return null;
 
@@ -34,7 +52,10 @@ export default function SpotlightSection({ profiles, onUserClick }: Props) {
           Spotlight
         </p>
       </div>
-      <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto no-scrollbar pb-1"
+      >
         {premiumProfiles.map(([principal, profile], i) => (
           <motion.button
             key={principal.toString()}
