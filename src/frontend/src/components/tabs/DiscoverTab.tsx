@@ -211,15 +211,6 @@ function getMatchPercent(
   return Math.min(100, Math.round((raw / maxScore) * 100));
 }
 
-const QUICK_REACTIONS = [
-  { emoji: "⭐", label: "Star" },
-  { emoji: "❤️", label: "Heart" },
-  { emoji: "💋", label: "Kiss" },
-  { emoji: "🥺", label: "Miss you" },
-  { emoji: "🙏", label: "Thanks" },
-  { emoji: "🔗", label: "Link" },
-];
-
 const CARD_GRADIENTS = [
   "linear-gradient(135deg, #3d1a5e, #1a3d5e)",
   "linear-gradient(135deg, #5e1a3d, #3d1a0a)",
@@ -341,7 +332,7 @@ export default function DiscoverTab({
   return (
     <div
       data-ocid="discover.page"
-      className="flex flex-col h-full overflow-y-auto"
+      className="flex flex-col h-full overflow-y-auto pb-4"
       style={{
         background: "var(--sf-bg, #0a0a0f)",
         scrollbarWidth: "none",
@@ -592,7 +583,6 @@ export default function DiscoverTab({
           searchQuery={searchQuery}
         />
         {/* Quick Send Reactions */}
-        <QuickReactionRow />
       </div>
 
       {/* Today's Picks - Tinder-style single card */}
@@ -827,43 +817,6 @@ function _OtherProfilesRow({
                 <Heart className="w-3 h-3 text-pink-400" />
               </button>
             </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function QuickReactionRow() {
-  const [sentIdx, setSentIdx] = useState<number | null>(null);
-
-  const handleSend = (idx: number) => {
-    setSentIdx(idx);
-    setTimeout(() => setSentIdx(null), 1500);
-  };
-
-  return (
-    <div className="px-3 pb-3 shrink-0">
-      <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-        {QUICK_REACTIONS.map((r, i) => (
-          <button
-            key={r.label}
-            type="button"
-            data-ocid="discover.button"
-            onClick={() => handleSend(i)}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-white text-sm font-semibold active:scale-95 transition-all"
-            style={{
-              background:
-                sentIdx === i
-                  ? "linear-gradient(135deg, #10b981, #059669)"
-                  : "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(168,85,247,0.3))",
-              border: "1px solid rgba(236,72,153,0.3)",
-            }}
-          >
-            <span className="text-base">{r.emoji}</span>
-            <span className="text-xs">
-              {sentIdx === i ? "Sent! ✓" : r.label}
-            </span>
           </button>
         ))}
       </div>
@@ -1232,7 +1185,7 @@ function YouMayLikeSection({
 }) {
   if (profiles.length === 0) return null;
   return (
-    <div className="shrink-0 pb-2">
+    <div className="shrink-0 pb-6">
       <div className="px-4 py-1.5 flex items-center justify-between">
         <p
           className="text-sm font-bold"
@@ -1326,7 +1279,7 @@ function TinderSection({
   const [lastMatchName, setLastMatchName] = useState("");
   const [sentReaction, setSentReaction] = useState<string | null>(null);
   const [heartBurst, setHeartBurst] = useState(false);
-  const [_superLiked, setSuperLiked] = useState(false);
+  const [_superLiked, _setSuperLiked] = useState(false);
   let lastTapTime = 0;
   const handleDoubleTap = () => {
     const now = Date.now();
@@ -1438,7 +1391,7 @@ function TinderSection({
     } catch {}
   };
 
-  const handleCardReaction = (emoji: string) => {
+  const _handleCardReaction = (emoji: string) => {
     setSentReaction(emoji);
     setTimeout(() => setSentReaction(null), 1500);
   };
@@ -1454,33 +1407,7 @@ function TinderSection({
   }
 
   if (!current) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
-        <div
-          className="w-20 h-20 rounded-full flex items-center justify-center"
-          style={{
-            background: "linear-gradient(135deg, #ec4899, #a855f7)",
-          }}
-        >
-          <Heart className="w-10 h-10 text-white" />
-        </div>
-        <div className="text-center">
-          <p className="text-white font-bold text-lg">
-            You&apos;re all caught up!
-          </p>
-          <p className="text-white/40 text-sm mt-1">
-            Check back soon for new profiles
-          </p>
-        </div>
-        <Button
-          onClick={() => setCurrentIndex(0)}
-          className="rounded-full px-6"
-          style={{ background: "linear-gradient(135deg, #ec4899, #a855f7)" }}
-        >
-          Restart
-        </Button>
-      </div>
-    );
+    return null;
   }
 
   const { prof, principalStr } = current;
@@ -1598,50 +1525,6 @@ function TinderSection({
             {prof.location && (
               <p className="text-white/40 text-xs">📍 {prof.location}</p>
             )}
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              <MutualInterestsBadge
-                myInterests={callerProfile?.interests}
-                theirInterests={prof.interests}
-              />
-              <BookmarkToggleButton
-                id={principalStr}
-                name={prof.displayName ?? ""}
-                type="profile"
-              />
-              <SafeReportButton userName={prof.displayName ?? "User"} />
-              <SuperLikeButton
-                onSuperLike={() => {
-                  setSuperLiked(true);
-                  handleLike();
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Per-card quick reactions */}
-          <div
-            className="px-3 pb-3 flex gap-1.5 overflow-x-auto no-scrollbar"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            {QUICK_REACTIONS.map((r) => (
-              <button
-                key={r.label}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCardReaction(r.emoji);
-                }}
-                className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-white text-xs active:scale-90 transition-transform"
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                }}
-              >
-                <span>{r.emoji}</span>
-                <span className="text-[10px] opacity-70">{r.label}</span>
-              </button>
-            ))}
           </div>
         </div>
       </motion.div>
@@ -1655,48 +1538,6 @@ function TinderSection({
         }}
         onBoost={() => {}}
       />
-      {/* Multiple Send Options */}
-      <div className="px-3 pt-1 pb-2">
-        <p className="text-white/30 text-[10px] text-center mb-1.5 font-medium uppercase tracking-widest">
-          Send a vibe
-        </p>
-        <div className="flex gap-2 justify-center flex-wrap">
-          {(
-            [
-              { emoji: "⭐", label: "Star", action: "star" },
-              { emoji: "❤️", label: "Heart", action: "heart" },
-              { emoji: "💋", label: "Kiss", action: "kiss" },
-              { emoji: "😢", label: "Miss You", action: "miss" },
-              { emoji: "🙏", label: "Thanks", action: "thanks" },
-              { emoji: "💬", label: "Message", action: "msg" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.action}
-              type="button"
-              data-ocid="discover.button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (opt.action === "star") {
-                  handleStar();
-                } else if (opt.action === "heart") {
-                  handleLike();
-                } else {
-                  handleCardReaction(opt.emoji);
-                }
-              }}
-              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl active:scale-90 transition-all"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <span className="text-base">{opt.emoji}</span>
-              <span className="text-white/40 text-[9px]">{opt.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
       {/* Action buttons (legacy) - hidden */}
       <div className="hidden flex items-center gap-4">
         <button

@@ -54,8 +54,9 @@ export function useGetAllProfiles() {
       return actor.getAllProfiles();
     },
     enabled: !!actor && !isFetching,
-    staleTime: 60_000,
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 }
 

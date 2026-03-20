@@ -10,6 +10,7 @@ import {
 import { Image, Music, Sparkles, Video } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
+import { ExternalBlob } from "../backend";
 import { useCreateStory } from "../hooks/useQueries";
 
 const GRADIENT_OPTIONS = [
@@ -53,46 +54,34 @@ export default function StoryCreatorSheet({ open, onClose }: Props) {
   const handleShare = async () => {
     setSharing(true);
     try {
+      const isVideo = previewMedia?.type === "video";
       const storyContent =
-        text.trim() ||
-        (previewMedia?.type === "audio"
-          ? `🎵 ${musicTitle || "Audio story"}`
-          : previewMedia?.type === "video"
-            ? "🎬 Video story"
-            : previewMedia?.type === "image"
-              ? "📷 Photo story"
-              : "✨ Story");
-      // Store media as base64 in localStorage for story viewer
+        (isVideo ? "__VIDEO__:" : "") +
+        (text.trim() ||
+          (previewMedia?.type === "audio"
+            ? `🎵 ${musicTitle || "Audio story"}`
+            : isVideo
+              ? "🎬 Video story"
+              : previewMedia?.type === "image"
+                ? "📷 Photo story"
+                : "✨ Story"));
+
+      let imageBlob: ExternalBlob | null = null;
       if (
         previewMedia &&
         (previewMedia.type === "image" || previewMedia.type === "video")
       ) {
         try {
           const resp = await fetch(previewMedia.url);
-          const blob = await resp.blob();
-          const reader = new FileReader();
-          const b64 = await new Promise<string>((res) => {
-            reader.onload = (e) => res((e.target?.result as string) ?? "");
-            reader.readAsDataURL(blob);
-          });
-          const mediaTs = Date.now();
-          const key = `sf_story_media_${mediaTs}`;
-          localStorage.setItem(
-            key,
-            JSON.stringify({ type: previewMedia.type, data: b64, ts: mediaTs }),
-          );
-          // Store reference for story viewer
-          const allRefs = JSON.parse(
-            localStorage.getItem("sf_story_media_refs") || "[]",
-          );
-          allRefs.push(key);
-          // Keep only last 20
-          while (allRefs.length > 20) allRefs.shift();
-          localStorage.setItem("sf_story_media_refs", JSON.stringify(allRefs));
-          localStorage.setItem("sf_story_latest_media", key);
+          const buf = await resp.arrayBuffer();
+          imageBlob = ExternalBlob.fromBytes(new Uint8Array(buf));
         } catch {}
       }
-      await createStory.mutateAsync({ content: storyContent, image: null });
+
+      await createStory.mutateAsync({
+        content: storyContent,
+        image: imageBlob,
+      });
     } catch {
       // Allow sharing even if backend fails (optimistic)
     } finally {

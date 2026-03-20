@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { useActor } from "../hooks/useActor";
 import { useCallSignal } from "../hooks/useCallSignal";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
@@ -59,7 +60,8 @@ export default function UserProfileView({
   const { data: following } = useGetFollowing(principal);
   const followMutation = useFollow();
   const starUser = useStarUser();
-  const { broadcastCall } = useCallSignal();
+  const { broadcastCall, broadcastCallViaBackend } = useCallSignal();
+  const { actor } = useActor();
 
   const [callMode, setCallMode] = useState<"voice" | "video" | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<"voice" | "video" | null>(
@@ -126,32 +128,32 @@ export default function UserProfileView({
     } catch {}
   };
 
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+
   const handleCallClick = (mode: "voice" | "video") => {
-    // Show outgoing overlay immediately to caller
     setOutgoingCall(mode);
-    // Broadcast incoming signal to callee (other tabs)
     if (myPrincipal) {
-      const callId = broadcastCall(
+      const cid = broadcastCall(
         principal.toString(),
         mode,
         myPrincipal.toString(),
       );
-      // Listen for accepted/rejected
+      setActiveCallId(cid);
+      broadcastCallViaBackend?.(principal, mode, myPrincipal.toString());
       const channel = new BroadcastChannel("social-fusion-calls");
       const timeout = setTimeout(() => {
         channel.close();
         setOutgoingCall(null);
-      }, 30000);
+      }, 45000);
       channel.onmessage = (evt: MessageEvent) => {
         const signal = evt.data;
-        if (signal.callId === callId) {
+        if (signal.callId === cid) {
           clearTimeout(timeout);
           channel.close();
           setOutgoingCall(null);
           if (signal.type === "accepted") {
             setCallMode(mode);
           }
-          // If rejected, outgoing overlay just closes (no toast)
         }
       };
     }
@@ -179,8 +181,14 @@ export default function UserProfileView({
     return (
       <CallScreen
         mode={callMode}
+        callId={activeCallId ?? undefined}
         otherProfile={profile!}
-        onEnd={() => setCallMode(null)}
+        otherPrincipal={principal}
+        actor={actor}
+        onEnd={() => {
+          setCallMode(null);
+          setActiveCallId(null);
+        }}
       />
     );
   }

@@ -31,13 +31,11 @@ import {
   Crown,
   Edit2,
   Gift,
-  Grid,
   Loader2,
   LogOut,
   Play,
   Plus,
   Settings2,
-  Share2,
   Shield,
   Sparkles,
   Trash2,
@@ -54,7 +52,6 @@ import {
   useGetCallerProfile,
   useGetFollowers,
   useGetFollowing,
-  useGetPostsByUser,
   useGetStories,
   useGetStoryHighlights,
   useSaveStoryToHighlight,
@@ -64,24 +61,7 @@ import { AppSettingsSheet } from "../AppSettingsSheet";
 import BirthdayBanner from "../BirthdayBanner";
 import FollowListSheet from "../FollowListSheet";
 import GiftSheet from "../GiftSheet";
-import MoodBoardSection from "../MoodBoardSection";
-import { PremiumScreen } from "../PremiumScreen";
-import {
-  AstrologyBadge,
-  LiveStreamModal,
-  ProfileMusicSection,
-  ProfileQRCode,
-  ReferralCard,
-  RelationshipGoalBadge,
-  RelationshipGoalPicker,
-  StatusMessageBadge,
-  StatusMessagePicker,
-  StoryPollCreator,
-  VideoStatusBubble,
-  VoiceIntroduction,
-  VoiceNoteStoryOption,
-  getZodiac,
-} from "../features/ProfileFeatures";
+// ProfileFeatures imports removed - unused features cleaned up
 
 const MOODS = ["😊", "🎉", "❤️", "🔥", "😴"];
 
@@ -110,22 +90,16 @@ export default function ProfileTab() {
   const qc = useQueryClient();
   const myPrincipal = identity?.getPrincipal() ?? null;
 
-  const {
-    data: profile,
-    isLoading: profileLoading,
-    refetch: refetchProfile,
-  } = useGetCallerProfile();
+  const { data: profile, refetch: refetchProfile } = useGetCallerProfile();
 
   // Force fresh fetch on every mount
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only
   useEffect(() => {
     refetchProfile();
   }, []);
-  const { data: posts } = useGetPostsByUser(myPrincipal);
   const { data: followers } = useGetFollowers(myPrincipal);
   const { data: following } = useGetFollowing(myPrincipal);
   const [privacyOpen, _setPrivacyOpen] = useState(false);
-  const [premiumOpen, setPremiumOpen] = useState(false);
   const [premiumTrial, setPremiumTrial] = useState<{
     isPremium: boolean;
     plan: string;
@@ -142,17 +116,12 @@ export default function ProfileTab() {
   }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("customize");
-  const [liveOpen, setLiveOpen] = useState(false);
-  const [userStatus, setUserStatus] = useState("");
-  const [relGoal, setRelGoal] = useState("");
   const [giftOpen, setGiftOpen] = useState(false);
   const [followSheet, setFollowSheet] = useState<
     "followers" | "following" | null
   >(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [profileStrength, setProfileStrength] = useState(0);
-  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  const [deletedPostIds, setDeletedPostIds] = useState<Set<string>>(new Set());
 
   // Privacy toggles
   const [_isPublic, _setIsPublic] = useState(true);
@@ -170,24 +139,6 @@ export default function ProfileTab() {
     await clear();
     qc.clear();
   };
-
-  if (profileLoading) {
-    return (
-      <div
-        data-ocid="profile.loading_state"
-        className="p-4 flex flex-col gap-4 bg-[#0a0a0f] h-full"
-      >
-        <Skeleton className="w-full h-40 rounded-2xl" />
-        <div className="flex items-center gap-4">
-          <Skeleton className="w-20 h-20 rounded-full" />
-          <div className="flex flex-col gap-2">
-            <Skeleton className="w-32 h-4" />
-            <Skeleton className="w-48 h-3" />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const calcAge = (birthday: string) => {
     if (!birthday) return null;
@@ -352,7 +303,6 @@ export default function ProfileTab() {
         {/* Stats */}
         <div className="flex gap-0 mt-4 border border-white/10 rounded-2xl overflow-hidden">
           {[
-            { label: "Posts", value: posts?.length ?? 0, clickable: false },
             {
               label: "Followers",
               value: followers?.length ?? 0,
@@ -477,144 +427,6 @@ export default function ProfileTab() {
             Send Gift
           </button>
         </div>
-
-        {/* Extra Profile Rows */}
-        <div className="mt-4 mx-0 flex flex-col rounded-2xl overflow-hidden border border-white/10">
-          {[
-            { icon: "🎵", label: "Music", sub: "Add your favorite songs" },
-            {
-              icon: "🎙️",
-              label: "Voice Introduction",
-              sub: "Record a voice intro",
-            },
-            {
-              icon: "🔊",
-              label: "Voice Note Story",
-              sub: "Share a voice note as story",
-            },
-            {
-              icon: "🤝",
-              label: "Refer a Friend",
-              sub: "Invite friends to Social Fusion",
-            },
-          ].map((item, i, arr) => (
-            <button
-              key={item.label}
-              type="button"
-              data-ocid="profile.button"
-              className={`flex items-center gap-3 px-4 py-3.5 active:bg-white/5 transition-colors text-left ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}
-            >
-              <span className="text-xl w-8 text-center">{item.icon}</span>
-              <div className="flex-1">
-                <p className="text-white text-sm font-medium">{item.label}</p>
-                <p className="text-white/30 text-xs">{item.sub}</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-white/20" />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* New Features: Status, Astrology, RelGoal, QR */}
-      <div className="px-4 mt-4 shrink-0 flex flex-col gap-3">
-        {/* Status row */}
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-          <span className="text-sm">💬</span>
-          <div className="flex-1">
-            <StatusMessageBadge status={userStatus} />
-            {!userStatus && (
-              <span className="text-xs text-white/30 italic">
-                No status set
-              </span>
-            )}
-          </div>
-          <StatusMessagePicker onSave={setUserStatus} />
-        </div>
-        {/* Astrology + QR row */}
-        <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-          <AstrologyBadge birthday={profile?.birthday} />
-          <ProfileQRCode name={profile?.displayName ?? "You"} />
-        </div>
-        {/* Relationship Goal */}
-        <RelationshipGoalPicker value={relGoal} onChange={setRelGoal} />
-        {relGoal && (
-          <div className="flex">
-            <RelationshipGoalBadge goal={relGoal} />
-          </div>
-        )}
-      </div>
-
-      {/* Video Status + Voice Intro */}
-      <div className="px-4 mt-4 shrink-0 grid grid-cols-2 gap-3">
-        <VideoStatusBubble />
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-white/40 text-xs">Story Polls</p>
-          <div className="w-full">
-            <StoryPollCreator />
-          </div>
-        </div>
-      </div>
-
-      {/* Profile Music */}
-      <div className="px-4 mt-4 shrink-0">
-        <ProfileMusicSection />
-      </div>
-
-      {/* Voice Introduction */}
-      <div className="px-4 mt-4 shrink-0">
-        <VoiceIntroduction />
-      </div>
-
-      {/* Voice Note Story Option */}
-      <div className="px-4 mt-4 shrink-0">
-        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-          <VoiceNoteStoryOption />
-        </div>
-      </div>
-
-      {/* Referral */}
-      <div className="px-4 mt-4 shrink-0">
-        <ReferralCard
-          principal={identity?.getPrincipal()?.toString() ?? "anon"}
-        />
-      </div>
-
-      {/* Quick Settings Shortcuts */}
-      <div className="px-4 mt-4 shrink-0 flex gap-3">
-        <button
-          type="button"
-          data-ocid="profile.secondary_button"
-          onClick={() => {
-            setSettingsTab("notifications");
-            setSettingsOpen(true);
-          }}
-          className="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-95 transition-transform"
-        >
-          <div className="w-8 h-8 rounded-full bg-pink-600/20 flex items-center justify-center shrink-0">
-            <span className="text-base">🔔</span>
-          </div>
-          <div className="text-left">
-            <p className="text-white font-semibold text-xs">Notifications</p>
-            <p className="text-white/30 text-[10px]">Manage alerts</p>
-          </div>
-        </button>
-        <button
-          type="button"
-          data-ocid="profile.secondary_button"
-          onClick={() => {
-            setSettingsTab("privacy");
-            setSettingsOpen(true);
-          }}
-          className="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-95 transition-transform"
-        >
-          <div className="w-8 h-8 rounded-full bg-purple-600/20 flex items-center justify-center shrink-0">
-            <span className="text-base">🔒</span>
-          </div>
-          <div className="text-left">
-            <p className="text-white font-semibold text-xs">Privacy</p>
-            <p className="text-white/30 text-[10px]">Control access</p>
-          </div>
-        </button>
       </div>
 
       {/* Privacy & Membership card */}
@@ -647,146 +459,6 @@ export default function ProfileTab() {
         </button>
       </div>
 
-      {/* Posts grid */}
-      <div className="border-t border-white/5 mt-6">
-        {posts &&
-        posts.filter((p) => !deletedPostIds.has(p.id.toString())).length > 0 ? (
-          <div className="grid grid-cols-3 gap-0.5">
-            {posts
-              .filter((p) => !deletedPostIds.has(p.id.toString()))
-              .map((post, i) => (
-                <button
-                  key={post.id.toString()}
-                  type="button"
-                  data-ocid={`profile.item.${i + 1}`}
-                  onClick={() => setLightboxIdx(i)}
-                  className="aspect-square bg-muted overflow-hidden relative"
-                  style={
-                    lightboxIdx === i
-                      ? {
-                          outline: "3px solid white",
-                          outlineOffset: "-3px",
-                          borderRadius: 12,
-                        }
-                      : {}
-                  }
-                >
-                  {post.image ? (
-                    <img
-                      src={post.image.getDirectURL()}
-                      alt="Post"
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-pink-900/30 to-purple-900/30 flex items-center justify-center p-2">
-                      <p className="text-xs text-center line-clamp-3 text-white/60">
-                        {post.content}
-                      </p>
-                    </div>
-                  )}
-                </button>
-              ))}
-          </div>
-        ) : (
-          <div
-            data-ocid="profile.empty_state"
-            className="flex flex-col items-center justify-center py-10 gap-2"
-          >
-            <Grid className="w-8 h-8 text-white/20" />
-            <p className="text-sm text-white/30">No posts yet</p>
-          </div>
-        )}
-      </div>
-
-      {/* Lightbox */}
-      <AnimatePresence>
-        {lightboxIdx !== null && posts && lightboxIdx < posts.length && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black flex flex-col"
-          >
-            <div className="flex items-center justify-between px-4 py-3 absolute top-0 left-0 right-0 z-10">
-              <button
-                type="button"
-                onClick={() => setLightboxIdx(null)}
-                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-              {myPrincipal &&
-                posts[lightboxIdx]?.author.toString() ===
-                  myPrincipal.toString() && (
-                  <button
-                    type="button"
-                    data-ocid="profile.delete_button"
-                    onClick={() => {
-                      const postId = posts[lightboxIdx]?.id.toString();
-                      if (postId) {
-                        setDeletedPostIds((prev) => new Set([...prev, postId]));
-                      }
-                      setLightboxIdx(null);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/20 text-red-400 text-sm"
-                  >
-                    <Trash2 className="w-4 h-4" /> Delete
-                  </button>
-                )}
-            </div>
-            {lightboxIdx > 0 && (
-              <button
-                type="button"
-                onClick={() => setLightboxIdx((i) => Math.max(0, (i ?? 0) - 1))}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10"
-              >
-                <ChevronLeft className="w-5 h-5 text-white" />
-              </button>
-            )}
-            {lightboxIdx <
-              posts.filter((p) => !deletedPostIds.has(p.id.toString())).length -
-                1 && (
-              <button
-                type="button"
-                onClick={() =>
-                  setLightboxIdx((i) =>
-                    Math.min(posts.length - 1, (i ?? 0) + 1),
-                  )
-                }
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center z-10"
-              >
-                <ChevronRight className="w-5 h-5 text-white" />
-              </button>
-            )}
-            <div className="flex-1 flex items-center justify-center">
-              {posts[lightboxIdx]?.image && (
-                <img
-                  src={posts[lightboxIdx].image!.getDirectURL()}
-                  alt="Post"
-                  className="max-w-full max-h-full object-contain"
-                />
-              )}
-              {!posts[lightboxIdx]?.image && (
-                <p className="text-white text-center px-8">
-                  {posts[lightboxIdx]?.content}
-                </p>
-              )}
-            </div>
-            {/* Post details */}
-            <div className="absolute bottom-0 left-0 right-0 px-4 py-4 bg-gradient-to-t from-black/80 to-transparent">
-              {posts[lightboxIdx]?.content && (
-                <p className="text-white text-sm mb-2">
-                  {posts[lightboxIdx].content.split("|||")[0]}
-                </p>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <PremiumScreen open={premiumOpen} onClose={() => setPremiumOpen(false)} />
-      {liveOpen && <LiveStreamModal onClose={() => setLiveOpen(false)} />}
       <AppSettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

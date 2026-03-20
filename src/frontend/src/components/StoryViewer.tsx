@@ -12,6 +12,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { Profile, Story } from "../backend";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 interface Comment {
   author: string;
@@ -35,6 +36,8 @@ export default function StoryViewer({
   profile,
   onClose,
 }: Props) {
+  const { identity } = useInternetIdentity();
+  const myPrincipal = identity?.getPrincipal().toString();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -49,9 +52,37 @@ export default function StoryViewer({
   >([]);
   const [commentInput, setCommentInput] = useState("");
   const [showMentions, setShowMentions] = useState(false);
+  const getStoryKey = (idx: number) => {
+    const s = stories[idx];
+    if (!s) return null;
+    return `sf_story_${_author.toString()}_${s.timestamp}`;
+  };
+
   const [allComments, setAllComments] = useState<
     { storyIdx: number; comments: Comment[] }[]
-  >(() => stories.map((_, i) => ({ storyIdx: i, comments: [] })));
+  >(() =>
+    stories.map((_, i) => {
+      try {
+        const key = `sf_story_${_author.toString()}_${stories[i]?.timestamp}`;
+        const raw = localStorage.getItem(`${key}_comments`);
+        if (raw) return { storyIdx: i, comments: JSON.parse(raw) as Comment[] };
+      } catch {}
+      return { storyIdx: i, comments: [] };
+    }),
+  );
+
+  const [allLikers, setAllLikers] = useState<
+    { storyIdx: number; likers: string[] }[]
+  >(() =>
+    stories.map((_, i) => {
+      try {
+        const key = `sf_story_${_author.toString()}_${stories[i]?.timestamp}`;
+        const raw = localStorage.getItem(`${key}_likers`);
+        if (raw) return { storyIdx: i, likers: JSON.parse(raw) as string[] };
+      } catch {}
+      return { storyIdx: i, likers: [] };
+    }),
+  );
   const [localMediaUrls, setLocalMediaUrls] = useState<
     Record<number, { type: string; data: string }>
   >({});
@@ -134,28 +165,53 @@ export default function StoryViewer({
     const next = [...liked];
     next[currentIndex] = !next[currentIndex];
     setLiked(next);
-    if (!liked[currentIndex]) {
+    const isNowLiked = !liked[currentIndex];
+    if (isNowLiked) {
       setLikeAnim(true);
       setTimeout(() => setLikeAnim(false), 600);
     }
+    // Persist liker to localStorage
+    try {
+      const key = getStoryKey(currentIndex);
+      if (key) {
+        const myName = profile?.displayName ?? myPrincipal ?? "Someone";
+        setAllLikers((prev) => {
+          const updated = prev.map((l, i) => {
+            if (i !== currentIndex) return l;
+            const set = new Set(l.likers);
+            if (isNowLiked) set.add(myName);
+            else set.delete(myName);
+            const arr = Array.from(set);
+            localStorage.setItem(`${key}_likers`, JSON.stringify(arr));
+            return { ...l, likers: arr };
+          });
+          return updated;
+        });
+      }
+    } catch {}
   };
 
   const handleSendComment = () => {
     const text = commentInput.trim();
     if (!text) return;
-    setAllComments((prev) =>
-      prev.map((c) =>
+    const myName = profile?.displayName ?? "You";
+    setAllComments((prev) => {
+      const updated = prev.map((c) =>
         c.storyIdx === currentIndex
-          ? {
-              ...c,
-              comments: [
-                ...c.comments,
-                { author: profile?.displayName ?? "You", text },
-              ],
-            }
+          ? { ...c, comments: [...c.comments, { author: myName, text }] }
           : c,
-      ),
-    );
+      );
+      // Persist
+      try {
+        const key = getStoryKey(currentIndex);
+        if (key) {
+          const comments =
+            updated.find((c) => c.storyIdx === currentIndex)?.comments ?? [];
+          localStorage.setItem(`${key}_comments`, JSON.stringify(comments));
+        }
+      } catch {}
+      return updated;
+    });
     setCommentInput("");
   };
 
@@ -261,13 +317,31 @@ export default function StoryViewer({
                 <span className="text-white/50 text-xs">{getTimeAgo()}</span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center"
-            >
-              <X className="w-4 h-4 text-white" />
-            </button>
+            <div className="flex items-center gap-2">
+              {myPrincipal && _author.toString() === myPrincipal && (
+                <div className="flex items-center gap-1.5">
+                  <div className="bg-black/40 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1">
+                    <span className="text-red-400 text-xs">❤️</span>
+                    <span className="text-white text-xs font-semibold">
+                      {allLikers[currentIndex]?.likers.length ?? 0}
+                    </span>
+                  </div>
+                  <div className="bg-black/40 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1">
+                    <span className="text-white text-xs">💬</span>
+                    <span className="text-white text-xs font-semibold">
+                      {allComments[currentIndex]?.comments.length ?? 0}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
+            </div>
           </div>
 
           {/* Story media */}
@@ -281,7 +355,24 @@ export default function StoryViewer({
             }}
             aria-label="Story tap navigation"
           >
-            {localMediaUrls[currentIndex]?.type === "video" ? (
+            {story.image && story.content?.startsWith("__VIDEO__:") ? (
+              <video
+                src={story.image.getDirectURL()}
+                className="w-full h-full object-cover"
+                autoPlay
+                muted={muted}
+                loop
+                playsInline
+              >
+                <track kind="captions" />
+              </video>
+            ) : story.image ? (
+              <img
+                src={story.image.getDirectURL()}
+                alt="Story"
+                className="w-full h-full object-cover"
+              />
+            ) : localMediaUrls[currentIndex]?.type === "video" ? (
               <video
                 src={localMediaUrls[currentIndex].data}
                 className="w-full h-full object-cover"
@@ -295,12 +386,6 @@ export default function StoryViewer({
             ) : localMediaUrls[currentIndex]?.type === "image" ? (
               <img
                 src={localMediaUrls[currentIndex].data}
-                alt="Story"
-                className="w-full h-full object-cover"
-              />
-            ) : story.image ? (
-              <img
-                src={story.image.getDirectURL()}
                 alt="Story"
                 className="w-full h-full object-cover"
               />
@@ -338,13 +423,15 @@ export default function StoryViewer({
           </AnimatePresence>
 
           {/* Story caption text */}
-          {story.content && story.image && (
-            <div className="absolute bottom-24 left-0 right-0 px-4 z-10 pointer-events-none">
-              <p className="text-white text-sm text-center drop-shadow">
-                {story.content}
-              </p>
-            </div>
-          )}
+          {story.content &&
+            !story.content.startsWith("__VIDEO__:") &&
+            story.image && (
+              <div className="absolute bottom-24 left-0 right-0 px-4 z-10 pointer-events-none">
+                <p className="text-white text-sm text-center drop-shadow">
+                  {story.content}
+                </p>
+              </div>
+            )}
 
           {/* Bottom actions */}
           <div className="absolute bottom-4 left-0 right-0 z-20 px-3">

@@ -1,4 +1,6 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useEffect, useRef, useState } from "react";
+import type { backendInterface } from "../backend";
 
 type CallSignal =
   | {
@@ -17,10 +19,16 @@ export interface IncomingCall {
   mode: "voice" | "video";
 }
 
-export function useCallSignal(myPrincipal?: string) {
+export function useCallSignal(
+  myPrincipal?: string,
+  recentContacts?: Principal[],
+  actor?: backendInterface | null,
+) {
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const handledCallIds = useRef<Set<string>>(new Set());
+  const actorRef = useRef<backendInterface | null | undefined>(actor);
+  actorRef.current = actor;
 
   // BroadcastChannel fallback for same-browser tab signaling
   useEffect(() => {
@@ -80,6 +88,47 @@ export function useCallSignal(myPrincipal?: string) {
     return () => clearInterval(timer);
   }, [myPrincipal]);
 
+  // Backend message polling for cross-device real calls
+  useEffect(() => {
+    if (!myPrincipal || !recentContacts || recentContacts.length === 0) return;
+
+    const pollBackend = async () => {
+      const currentActor = actorRef.current;
+      if (!currentActor) return;
+      try {
+        for (const contact of recentContacts) {
+          const msgs = await currentActor.getMessages(contact);
+          if (!msgs || msgs.length === 0) continue;
+          // Check last few messages for call signals sent TO us
+          const recent = [...msgs]
+            .sort((a, b) => Number(b.timestamp - a.timestamp))
+            .slice(0, 5);
+          for (const msg of recent) {
+            // Only process messages FROM this contact TO us
+            if (msg.from.toString() !== contact.toString()) continue;
+            if (msg.to.toString() !== myPrincipal) continue;
+            if (!msg.content.startsWith("__SF_CALL_OFFER__|")) continue;
+            const parts = msg.content.split("|");
+            if (parts.length < 4) continue;
+            const callId = parts[1];
+            const mode = parts[2] as "voice" | "video";
+            const callerPrincipal = parts[3];
+            // Check age: timestamp is in nanoseconds
+            const msgMs = Number(msg.timestamp / 1_000_000n);
+            const age = Date.now() - msgMs;
+            if (age > 60_000) continue;
+            if (handledCallIds.current.has(callId)) continue;
+            setIncomingCall({ callId, callerPrincipal, mode });
+          }
+        }
+      } catch {}
+    };
+
+    const timer = setInterval(pollBackend, 3000);
+    pollBackend();
+    return () => clearInterval(timer);
+  }, [myPrincipal, recentContacts]);
+
   const broadcastCall = (
     calleePrincipal: string,
     mode: "voice" | "video",
@@ -110,7 +159,24 @@ export function useCallSignal(myPrincipal?: string) {
     return callId;
   };
 
-  const broadcastAccept = (callId: string) => {
+  const broadcastCallViaBackend = async (
+    calleePrincipal: Principal,
+    mode: "voice" | "video",
+    callerPrincipal?: string,
+  ): Promise<string> => {
+    const callId = `call-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const currentActor = actorRef.current;
+    if (!currentActor) return callId;
+    try {
+      await currentActor.sendMessage(
+        calleePrincipal,
+        `__SF_CALL_OFFER__|${callId}|${mode}|${callerPrincipal ?? "unknown"}`,
+      );
+    } catch {}
+    return callId;
+  };
+
+  const broadcastAccept = (callId: string, callerPrincipal?: Principal) => {
     handledCallIds.current.add(callId);
     if (myPrincipal) {
       localStorage.removeItem(`sf_call_signal_${myPrincipal}`);
@@ -119,9 +185,15 @@ export function useCallSignal(myPrincipal?: string) {
       type: "accepted",
       callId,
     } satisfies CallSignal);
+    // Also send via backend if we know the caller
+    if (callerPrincipal) {
+      actorRef.current
+        ?.sendMessage(callerPrincipal, `__SF_CALL_ANSWER__|${callId}`)
+        .catch(() => {});
+    }
   };
 
-  const broadcastReject = (callId: string) => {
+  const broadcastReject = (callId: string, callerPrincipal?: Principal) => {
     handledCallIds.current.add(callId);
     if (myPrincipal) {
       localStorage.removeItem(`sf_call_signal_${myPrincipal}`);
@@ -131,6 +203,12 @@ export function useCallSignal(myPrincipal?: string) {
       callId,
     } satisfies CallSignal);
     setIncomingCall(null);
+    // Also send via backend if we know the caller
+    if (callerPrincipal) {
+      actorRef.current
+        ?.sendMessage(callerPrincipal, `__SF_CALL_REJECT__|${callId}`)
+        .catch(() => {});
+    }
   };
 
   const broadcastEnd = (callId: string) => {
@@ -153,6 +231,7 @@ export function useCallSignal(myPrincipal?: string) {
   return {
     incomingCall,
     broadcastCall,
+    broadcastCallViaBackend,
     broadcastAccept,
     broadcastReject,
     broadcastEnd,

@@ -23,7 +23,6 @@ import {
   Settings,
   ShieldX,
   SmilePlus,
-  Train,
   Trash2,
   User,
   Video,
@@ -47,7 +46,6 @@ import CallScreen from "../CallScreen";
 import GifPicker from "../GifPicker";
 import IcebreakerCard, { getRandomIcebreaker } from "../IcebreakerCard";
 import IncomingCallOverlay from "../IncomingCallOverlay";
-import LoveTrackScreen from "../LoveTrackScreen";
 import OutgoingCallOverlay from "../OutgoingCallOverlay";
 import StoryCreatorSheet from "../StoryCreatorSheet";
 import {
@@ -200,9 +198,11 @@ const EMOJI_LIST = [
 export default function MessagesTab({
   onChatOpenChange,
   onViewProfile,
+  onInitCall,
 }: {
   onChatOpenChange?: (open: boolean) => void;
   onViewProfile?: (p: import("@icp-sdk/core/principal").Principal) => void;
+  onInitCall?: (callee: Principal, mode: "voice" | "video") => void;
 }) {
   const [selectedUser, setSelectedUser] = useState<{
     principal: Principal;
@@ -236,6 +236,7 @@ export default function MessagesTab({
         otherProfile={selectedUser.profile}
         onBack={handleBackFromChat}
         onViewProfile={onViewProfile}
+        onInitCall={onInitCall}
       />
     );
   }
@@ -259,9 +260,8 @@ function ConversationList({
   onSettings: () => void;
 }) {
   const [showNewChatSheet, setShowNewChatSheet] = useState(false);
-  const [showLoveTrack, setShowLoveTrack] = useState(false);
   const [showStoryCreatorInList, setShowStoryCreatorInList] = useState(false);
-  const { data: profiles, isLoading } = useGetAllProfiles();
+  const { data: profiles, isLoading: _profilesLoading } = useGetAllProfiles();
   const { data: friendPrincipals } = useGetFriends();
   const { blockedSet } = useBlockedUsers();
   const { identity } = useInternetIdentity();
@@ -400,9 +400,6 @@ function ConversationList({
 
   return (
     <>
-      {showLoveTrack && (
-        <LoveTrackScreen onClose={() => setShowLoveTrack(false)} />
-      )}
       <StoryCreatorSheet
         open={showStoryCreatorInList}
         onClose={() => setShowStoryCreatorInList(false)}
@@ -588,19 +585,7 @@ function ConversationList({
             >
               <Inbox className="w-4 h-4 text-white/70" />
             </button>
-            <button
-              type="button"
-              data-ocid="messages.toggle"
-              onClick={() => setShowLoveTrack(true)}
-              className="w-9 h-9 rounded-full flex items-center justify-center border border-pink-500/30"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(168,85,247,0.2))",
-              }}
-              title="Love Track"
-            >
-              <Train className="w-4 h-4 text-pink-300" />
-            </button>
+
             <button
               type="button"
               data-ocid="messages.edit_button"
@@ -682,23 +667,7 @@ function ConversationList({
         <div className="h-px bg-white/5 mx-4 shrink-0" />
 
         <div className="flex-1 overflow-y-auto pb-20">
-          {isLoading ? (
-            <div className="p-3 flex flex-col gap-3">
-              {["s1", "s2", "s3", "s4"].map((sk) => (
-                <div
-                  key={sk}
-                  data-ocid="messages.loading_state"
-                  className="flex items-center gap-3 p-3"
-                >
-                  <Skeleton className="w-12 h-12 rounded-full" />
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <Skeleton className="w-32 h-3" />
-                    <Skeleton className="w-24 h-2" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : otherUsers.length > 0 ? (
+          {otherUsers.length > 0 ? (
             <div className="flex flex-col">
               {visibleFriends.length > 0 && (
                 <div className="px-4 pt-3 pb-1">
@@ -988,7 +957,7 @@ function NewChatBottomSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 z-50 bg-[#1a1a2e] rounded-t-3xl overflow-hidden flex flex-col"
+            className="fixed inset-x-0 bottom-0 z-50 bg-[#0a0a0f]/95 backdrop-blur-xl rounded-t-3xl overflow-hidden flex flex-col"
             style={{ maxHeight: "80dvh" }}
           >
             {/* Handle */}
@@ -1016,7 +985,7 @@ function NewChatBottomSheet({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search people..."
-                  className="w-full bg-white/8 border border-white/10 text-white placeholder:text-white/30 h-10 rounded-xl pl-9 pr-4 text-sm outline-none focus:border-pink-500/50"
+                  className="w-full bg-transparent border border-white/10 text-white placeholder:text-white/30 h-10 rounded-xl pl-9 pr-4 text-sm outline-none focus:border-pink-500/50"
                 />
               </div>
             </div>
@@ -1072,11 +1041,13 @@ function ConversationView({
   otherProfile,
   onBack,
   onViewProfile,
+  onInitCall,
 }: {
   otherUser: Principal;
   otherProfile: Profile;
   onBack: () => void;
   onViewProfile?: (p: Principal) => void;
+  onInitCall?: (callee: Principal, mode: "voice" | "video") => void;
 }) {
   const [text, setText] = useState("");
   const [activeCall, setActiveCall] = useState<"voice" | "video" | null>(null);
@@ -1088,6 +1059,10 @@ function ConversationView({
   >(null);
 
   const handleInitCall = (mode: "voice" | "video") => {
+    if (onInitCall) {
+      onInitCall(otherUser, mode);
+      return;
+    }
     setOutgoingCall(mode);
     // Write call signal to callee's localStorage key
     const calleePid = otherUser.toString();
@@ -1193,7 +1168,7 @@ function ConversationView({
       return [];
     }
   });
-  const { data: messages, isLoading } = useGetMessages(otherUser);
+  const { data: messages } = useGetMessages(otherUser);
   const sendMessage = useSendMessage();
   const formatTs = useFormatTimestamp();
 
@@ -1530,14 +1505,7 @@ function ConversationView({
           otherName={otherProfile.displayName}
         />
 
-        {isLoading ? (
-          <div
-            data-ocid="messages.loading_state"
-            className="flex justify-center py-8"
-          >
-            <Loader2 className="w-6 h-6 animate-spin text-white/30" />
-          </div>
-        ) : messages && messages.length > 0 ? (
+        {messages && messages.length > 0 ? (
           [...messages]
             .reverse()
             .filter(

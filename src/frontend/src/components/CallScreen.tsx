@@ -1,20 +1,24 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { Principal } from "@icp-sdk/core/principal";
 import {
   Mic,
   MicOff,
   PhoneOff,
   RotateCcw,
-  Speaker,
   Video,
   VideoOff,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Profile } from "../backend";
+import type { Profile, backendInterface } from "../backend";
 
 interface Props {
   mode: "voice" | "video";
+  role?: "caller" | "callee";
+  callId?: string;
   otherProfile: Profile;
+  otherPrincipal?: Principal;
+  actor?: backendInterface | null;
   onEnd: () => void;
 }
 
@@ -22,12 +26,34 @@ const STUN_SERVERS = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
   ],
 };
 
-export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
+function sdpToBase64(sdp: RTCSessionDescriptionInit): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(sdp))));
+}
+function base64ToSdp(b64: string): RTCSessionDescriptionInit {
+  return JSON.parse(decodeURIComponent(escape(atob(b64))));
+}
+function iceToBase64(c: RTCIceCandidate): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(c.toJSON()))));
+}
+function base64ToIce(b64: string): RTCIceCandidateInit {
+  return JSON.parse(decodeURIComponent(escape(atob(b64))));
+}
+
+export default function CallScreen({
+  mode,
+  role = "caller",
+  callId = `call-${Date.now()}`,
+  otherProfile,
+  otherPrincipal,
+  actor,
+  onEnd,
+}: Props) {
   const [muted, setMuted] = useState(false);
-  const [speakerOn, setSpeakerOn] = useState(true);
   const [videoOff, setVideoOff] = useState(false);
   const [status, setStatus] = useState<
     "connecting" | "ringing" | "connected" | "failed"
@@ -36,28 +62,47 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedMsgs = useRef<Set<string>>(new Set());
+  const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
+  const remoteDescSet = useRef(false);
+  const actorRef = useRef(actor);
+  actorRef.current = actor;
+  const otherPrincipalRef = useRef(otherPrincipal);
+  otherPrincipalRef.current = otherPrincipal;
 
   const cleanup = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
     for (const t of localStreamRef.current?.getTracks() ?? []) t.stop();
     pcRef.current?.close();
     pcRef.current = null;
     localStreamRef.current = null;
   }, []);
 
+  const addPendingCandidates = useCallback(async (pc: RTCPeerConnection) => {
+    for (const c of pendingCandidates.current) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch {}
+    }
+    pendingCandidates.current = [];
+  }, []);
+
+  // Init WebRTC
   useEffect(() => {
     let mounted = true;
 
-    const initWebRTC = async () => {
+    const init = async () => {
       try {
-        setStatus("connecting");
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100,
+          },
           video:
             mode === "video"
               ? { facingMode: "user", width: 640, height: 480 }
@@ -73,6 +118,7 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
 
         if (mode === "video" && localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true;
         }
 
         const pc = new RTCPeerConnection(STUN_SERVERS);
@@ -81,56 +127,174 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
         for (const track of stream.getTracks()) pc.addTrack(track, stream);
 
         pc.ontrack = (event) => {
-          if (remoteVideoRef.current && event.streams[0]) {
-            remoteVideoRef.current.srcObject = event.streams[0];
+          if (!mounted) return;
+          const remoteStream = event.streams[0];
+          if (mode === "video" && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.play().catch(() => {});
           }
+          // Always connect audio
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = remoteStream;
+            remoteAudioRef.current.play().catch(() => {});
+          }
+        };
+
+        pc.onicecandidate = async (event) => {
+          if (!event.candidate || !mounted) return;
+          const other = otherPrincipalRef.current;
+          if (!other) return;
+          const ice64 = iceToBase64(event.candidate);
+          try {
+            await actorRef.current?.sendMessage(
+              other,
+              `__SF_ICE__|${callId}|${ice64}`,
+            );
+          } catch {}
         };
 
         pc.oniceconnectionstatechange = () => {
           if (!mounted) return;
-          if (
-            pc.iceConnectionState === "connected" ||
-            pc.iceConnectionState === "completed"
-          ) {
+          const state = pc.iceConnectionState;
+          if (state === "connected" || state === "completed") {
             setStatus("connected");
-            intervalRef.current = setInterval(() => {
-              setDuration((d) => d + 1);
-            }, 1000);
-          } else if (
-            pc.iceConnectionState === "failed" ||
-            pc.iceConnectionState === "disconnected"
-          ) {
+            intervalRef.current = setInterval(
+              () => setDuration((d) => d + 1),
+              1000,
+            );
+          } else if (state === "failed" || state === "closed") {
             setStatus("failed");
           }
         };
 
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        // Since we have no signaling server, simulate "ringing" and then
-        // after timeout show "connected" with local stream only
-        setStatus("ringing");
-        connectTimeoutRef.current = setTimeout(() => {
-          if (!mounted) return;
-          // No remote peer — show connected UI with local video
-          setStatus("connected");
-          intervalRef.current = setInterval(() => {
-            setDuration((d) => d + 1);
-          }, 1000);
-        }, 4000);
+        if (role === "caller") {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          const other = otherPrincipalRef.current;
+          if (other) {
+            const offerB64 = sdpToBase64(offer);
+            await actorRef.current?.sendMessage(
+              other,
+              `__SF_SDP_OFFER__|${callId}|${offerB64}`,
+            );
+          }
+          setStatus("ringing");
+        } else {
+          // callee: wait for offer via polling
+          setStatus("connecting");
+        }
       } catch {
         if (!mounted) return;
         setStatus("failed");
       }
     };
 
-    initWebRTC();
-
+    init();
     return () => {
       mounted = false;
       cleanup();
     };
-  }, [mode, cleanup]);
+  }, [mode, role, callId, cleanup]);
+
+  // Signaling poll
+  useEffect(() => {
+    const other = otherPrincipal;
+    if (!other) return;
+    let mounted = true;
+
+    const poll = async () => {
+      try {
+        const msgs = await actorRef.current?.getMessages(other);
+        if (!msgs || !mounted) return;
+
+        const sorted = [...msgs]
+          .sort((a, b) => Number(b.timestamp - a.timestamp))
+          .slice(0, 30);
+
+        for (const msg of sorted) {
+          if (msg.from.toString() !== other.toString()) continue;
+          const key = `${msg.timestamp}-${msg.content.slice(0, 40)}`;
+          if (processedMsgs.current.has(key)) continue;
+
+          const pc = pcRef.current;
+
+          // Caller receives answer
+          if (
+            role === "caller" &&
+            msg.content.startsWith(`__SF_SDP_ANSWER__|${callId}|`)
+          ) {
+            processedMsgs.current.add(key);
+            if (pc && !remoteDescSet.current) {
+              try {
+                const b64 = msg.content.split("|")[2];
+                const answer = base64ToSdp(b64);
+                await pc.setRemoteDescription(
+                  new RTCSessionDescription(answer),
+                );
+                remoteDescSet.current = true;
+                await addPendingCandidates(pc);
+              } catch {}
+            }
+          }
+
+          // Callee receives offer
+          if (
+            role === "callee" &&
+            msg.content.startsWith(`__SF_SDP_OFFER__|${callId}|`)
+          ) {
+            processedMsgs.current.add(key);
+            if (pc && !remoteDescSet.current) {
+              try {
+                const b64 = msg.content.split("|")[2];
+                const offer = base64ToSdp(b64);
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                remoteDescSet.current = true;
+                await addPendingCandidates(pc);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                const answerB64 = sdpToBase64(answer);
+                await actorRef.current?.sendMessage(
+                  other,
+                  `__SF_SDP_ANSWER__|${callId}|${answerB64}`,
+                );
+                setStatus("ringing");
+              } catch {}
+            }
+          }
+
+          // ICE candidates
+          if (msg.content.startsWith(`__SF_ICE__|${callId}|`)) {
+            processedMsgs.current.add(key);
+            if (pc) {
+              try {
+                const b64 = msg.content.split("|")[2];
+                const candidate = base64ToIce(b64);
+                if (remoteDescSet.current) {
+                  await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } else {
+                  pendingCandidates.current.push(candidate);
+                }
+              } catch {}
+            }
+          }
+
+          // Call ended by other side
+          if (msg.content.startsWith(`__SF_CALL_END__|${callId}`)) {
+            processedMsgs.current.add(key);
+            cleanup();
+            if (mounted) onEnd();
+          }
+        }
+      } catch {}
+    };
+
+    const timer = setInterval(poll, 2000);
+    poll();
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [otherPrincipal, role, callId, cleanup, onEnd, addPendingCandidates]);
 
   const toggleMute = () => {
     const stream = localStreamRef.current;
@@ -146,7 +310,13 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
     setVideoOff((v) => !v);
   };
 
-  const handleEnd = () => {
+  const handleEnd = async () => {
+    const other = otherPrincipalRef.current;
+    if (other) {
+      try {
+        await actorRef.current?.sendMessage(other, `__SF_CALL_END__|${callId}`);
+      } catch {}
+    }
     cleanup();
     onEnd();
   };
@@ -170,6 +340,10 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
         transition={{ duration: 0.3 }}
         className="fixed inset-0 z-50 flex flex-col"
       >
+        {/* Hidden audio for remote stream on voice calls */}
+        {/* biome-ignore lint/a11y/useMediaCaption: remote audio */}
+        <audio ref={remoteAudioRef} autoPlay playsInline />
+
         {mode === "video" ? (
           <VideoCallLayout
             otherProfile={otherProfile}
@@ -177,12 +351,10 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
             duration={duration}
             muted={muted}
             videoOff={videoOff}
-            speakerOn={speakerOn}
             localVideoRef={localVideoRef}
             remoteVideoRef={remoteVideoRef}
             formatDuration={formatDuration}
             onMute={toggleMute}
-            onSpeaker={() => setSpeakerOn((s) => !s)}
             onVideoToggle={toggleVideo}
             onEnd={handleEnd}
           />
@@ -192,10 +364,8 @@ export default function CallScreen({ mode, otherProfile, onEnd }: Props) {
             status={status}
             duration={duration}
             muted={muted}
-            speakerOn={speakerOn}
             formatDuration={formatDuration}
             onMute={toggleMute}
-            onSpeaker={() => setSpeakerOn((s) => !s)}
             onEnd={handleEnd}
           />
         )}
@@ -209,20 +379,16 @@ function VoiceCallLayout({
   status,
   duration,
   muted,
-  speakerOn,
   formatDuration,
   onMute,
-  onSpeaker,
   onEnd,
 }: {
   otherProfile: Profile;
   status: string;
   duration: number;
   muted: boolean;
-  speakerOn: boolean;
   formatDuration: (s: number) => string;
   onMute: () => void;
-  onSpeaker: () => void;
   onEnd: () => void;
 }) {
   const statusLabel =
@@ -280,10 +446,10 @@ function VoiceCallLayout({
           <PhoneOff className="w-7 h-7 text-white" />
         </button>
         <CallButton
-          icon={Speaker}
-          label={speakerOn ? "Speaker" : "Earpiece"}
-          active={!speakerOn}
-          onClick={onSpeaker}
+          icon={Mic}
+          label="Speaker"
+          active={false}
+          onClick={() => {}}
         />
       </div>
     </div>
@@ -296,12 +462,10 @@ function VideoCallLayout({
   duration,
   muted,
   videoOff,
-  speakerOn,
   localVideoRef,
   remoteVideoRef,
   formatDuration,
   onMute,
-  onSpeaker,
   onVideoToggle,
   onEnd,
 }: {
@@ -310,12 +474,10 @@ function VideoCallLayout({
   duration: number;
   muted: boolean;
   videoOff: boolean;
-  speakerOn: boolean;
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
   formatDuration: (s: number) => string;
   onMute: () => void;
-  onSpeaker: () => void;
   onVideoToggle: () => void;
   onEnd: () => void;
 }) {
@@ -332,16 +494,15 @@ function VideoCallLayout({
   return (
     <div className="flex-1 bg-black relative flex flex-col">
       {/* Remote video - full screen */}
+      {/* biome-ignore lint/a11y/useMediaCaption: video call */}
       <video
         ref={remoteVideoRef}
         autoPlay
         playsInline
         className="absolute inset-0 w-full h-full object-cover"
-      >
-        <track kind="captions" />
-      </video>
+      />
 
-      {/* Background when no remote video */}
+      {/* Background when not connected */}
       {isConnecting && (
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
@@ -363,13 +524,14 @@ function VideoCallLayout({
         </div>
       )}
 
-      {/* Duration top-center */}
+      {/* Status top */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-3 py-1 rounded-full z-10">
         {statusLabel}
       </div>
 
-      {/* Local video PiP bottom-right */}
+      {/* Local PiP */}
       <div className="absolute bottom-24 right-4 w-24 h-32 rounded-xl overflow-hidden ring-2 ring-white/20 z-10 bg-slate-800">
+        {/* biome-ignore lint/a11y/useMediaCaption: pip preview */}
         <video
           ref={localVideoRef}
           autoPlay
@@ -407,12 +569,6 @@ function VideoCallLayout({
           <PhoneOff className="w-6 h-6 text-white" />
         </button>
         <CallButton
-          icon={Speaker}
-          label={speakerOn ? "Speaker" : "Earpiece"}
-          active={!speakerOn}
-          onClick={onSpeaker}
-        />
-        <CallButton
           icon={RotateCcw}
           label="Flip"
           active={false}
@@ -441,7 +597,9 @@ function CallButton({
       className="flex flex-col items-center gap-1"
     >
       <div
-        className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${active ? "bg-white/20" : "bg-white/10"}`}
+        className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+          active ? "bg-white/20" : "bg-white/10"
+        }`}
       >
         <Icon className="w-5 h-5 text-white" />
       </div>

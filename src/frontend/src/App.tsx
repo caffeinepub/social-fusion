@@ -5,7 +5,6 @@ import { useState } from "react";
 import BiometricLockScreen from "./components/BiometricLockScreen";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import CallScreen from "./components/CallScreen";
-import DarkModeFAB from "./components/DarkModeFAB";
 import IncomingCallOverlay from "./components/IncomingCallOverlay";
 import LoginScreen from "./components/LoginScreen";
 import NotificationsPanel from "./components/NotificationsPanel";
@@ -18,11 +17,13 @@ import ProfileTab from "./components/tabs/ProfileTab";
 import RequestsTab from "./components/tabs/RequestsTab";
 import { PrivacyProvider } from "./contexts/PrivacyContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { useActor } from "./hooks/useActor";
 import { useCallSignal } from "./hooks/useCallSignal";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import {
   useGetAllProfiles,
   useGetCallerProfileForAuth,
+  useGetMatches,
   usePrefetchAll,
 } from "./hooks/useQueries";
 
@@ -31,8 +32,8 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       gcTime: 5 * 60_000,
-      retry: 3,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+      retry: 2,
+      retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 5000),
     },
   },
 });
@@ -58,9 +59,7 @@ function AppInner() {
     return (
       <div className="app-container">
         <div className="min-h-dvh flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 animate-pulse" />
-          </div>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 animate-pulse" />
         </div>
       </div>
     );
@@ -89,13 +88,19 @@ function MainApp() {
   const [chatOpen, setChatOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+
   const [globalCallMode, setGlobalCallMode] = useState<
     "voice" | "video" | null
   >(null);
   const [globalCallProfile, setGlobalCallProfile] = useState<
     { displayName: string; avatar?: { getDirectURL: () => string } } | undefined
   >(undefined);
+  const [globalCallRole, setGlobalCallRole] = useState<"caller" | "callee">(
+    "caller",
+  );
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [globalCallOtherPrincipal, setGlobalCallOtherPrincipal] =
+    useState<Principal | null>(null);
 
   // Biometric lock state per tab
   const [profileUnlocked, setProfileUnlocked] = useState(false);
@@ -105,7 +110,6 @@ function MainApp() {
     localStorage.getItem("sf_biometric_enabled") === "true";
 
   const handleTabChange = (tab: Tab) => {
-    // Re-lock when leaving protected tabs
     if (prevTab !== tab) {
       if (biometricEnabled) {
         if (tab !== "profile") setProfileUnlocked(false);
@@ -118,10 +122,18 @@ function MainApp() {
 
   const { data: allProfiles } = useGetAllProfiles();
   const { identity } = useInternetIdentity();
+  const { actor } = useActor();
   const myPrincipal = identity?.getPrincipal().toString();
 
-  const { incomingCall, broadcastAccept, broadcastReject, clearIncoming } =
-    useCallSignal(myPrincipal);
+  const { data: matchesList } = useGetMatches();
+  const {
+    incomingCall,
+    broadcastCall,
+    broadcastCallViaBackend,
+    broadcastAccept,
+    broadcastReject,
+    clearIncoming,
+  } = useCallSignal(myPrincipal, matchesList ?? [], actor);
 
   const { data: userProfile, isFetched } = useGetCallerProfileForAuth();
   const needsSetup = isFetched && userProfile === null;
@@ -137,7 +149,6 @@ function MainApp() {
   const handleUserClick = (p: Principal) => setViewingUser(p);
   const handleBack = () => setViewingUser(null);
 
-  // Only show incoming call to the callee (not the caller)
   const showIncomingCall =
     !!incomingCall && incomingCall.callerPrincipal !== myPrincipal;
 
@@ -156,7 +167,12 @@ function MainApp() {
         : undefined,
     );
     setGlobalCallMode(incomingCall.mode);
+    setGlobalCallRole("callee");
     setActiveCallId(incomingCall.callId);
+    // Set other principal from allProfiles
+    if (found) {
+      setGlobalCallOtherPrincipal(found[0]);
+    }
     clearIncoming();
   };
 
@@ -170,16 +186,20 @@ function MainApp() {
       <div className="app-container">
         <CallScreen
           mode={globalCallMode}
+          role={globalCallRole}
+          callId={activeCallId ?? undefined}
           otherProfile={
             globalCallProfile as Parameters<
               typeof CallScreen
             >[0]["otherProfile"]
           }
+          otherPrincipal={globalCallOtherPrincipal ?? undefined}
+          actor={actor}
           onEnd={() => {
             setGlobalCallMode(null);
             setGlobalCallProfile(undefined);
             setActiveCallId(null);
-            void activeCallId;
+            setGlobalCallOtherPrincipal(null);
           }}
         />
       </div>
@@ -237,7 +257,28 @@ function MainApp() {
               />
             )}
             {activeTab === "requests" && (
-              <RequestsTab onUserClick={handleUserClick} />
+              <RequestsTab
+                onUserClick={handleUserClick}
+                onMessageUser={() => setActiveTab("chats")}
+                onInitCall={(callee, mode) => {
+                  const profile = allProfiles?.find(
+                    ([p]) => p.toString() === callee.toString(),
+                  );
+                  const cid = broadcastCall(
+                    callee.toString(),
+                    mode,
+                    myPrincipal,
+                  );
+                  broadcastCallViaBackend?.(callee, mode, myPrincipal);
+                  setGlobalCallMode(mode);
+                  setGlobalCallRole("caller");
+                  setActiveCallId(cid);
+                  setGlobalCallOtherPrincipal(callee);
+                  setGlobalCallProfile(
+                    profile?.[1] as typeof globalCallProfile,
+                  );
+                }}
+              />
             )}
             {activeTab === "matches" && (
               <MatchesTab
@@ -254,6 +295,24 @@ function MainApp() {
                 <MessagesTab
                   onChatOpenChange={setChatOpen}
                   onViewProfile={handleUserClick}
+                  onInitCall={(callee, mode) => {
+                    const profile = allProfiles?.find(
+                      ([p]) => p.toString() === callee.toString(),
+                    );
+                    const cid = broadcastCall(
+                      callee.toString(),
+                      mode,
+                      myPrincipal,
+                    );
+                    broadcastCallViaBackend?.(callee, mode, myPrincipal);
+                    setGlobalCallMode(mode);
+                    setGlobalCallRole("caller");
+                    setActiveCallId(cid);
+                    setGlobalCallOtherPrincipal(callee);
+                    setGlobalCallProfile(
+                      profile?.[1] as typeof globalCallProfile,
+                    );
+                  }}
                 />
               ))}
             {activeTab === "profile" &&
@@ -283,7 +342,6 @@ function MainApp() {
         }}
       />
 
-      <DarkModeFAB />
       {showIncomingCall && (
         <IncomingCallOverlay
           profile={(() => {

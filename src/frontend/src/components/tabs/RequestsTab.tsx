@@ -22,21 +22,25 @@ import {
   useGetAllProfiles,
   useTinderPass,
 } from "../../hooks/useQueries";
-import CallScreen from "../CallScreen";
 
 interface Props {
   onUserClick: (p: Principal) => void;
   onMessageUser?: (p: Principal) => void;
+  onInitCall?: (callee: Principal, mode: "voice" | "video") => void;
 }
 
-export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
+export default function RequestsTab({
+  onUserClick,
+  onMessageUser,
+  onInitCall,
+}: Props) {
   const { data: profiles, isLoading } = useGetAllProfiles();
   const { identity } = useInternetIdentity();
   const myPrincipal = identity?.getPrincipal();
   const acceptRequest = useAcceptRequest();
   const tinderPass = useTinderPass();
   const { blockedSet } = useBlockedUsers();
-  const [callingUser, setCallingUser] = useState<{ name: string } | null>(null);
+  const myPrincipalStr = myPrincipal?.toString() ?? "";
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
   const [declinedIds, setDeclinedIds] = useState<Set<string>>(new Set());
   const [justAccepted, setJustAccepted] = useState<string | null>(null);
@@ -83,30 +87,27 @@ export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
     } catch {}
   };
 
-  if (callingUser) {
-    const fakeProfile = {
-      displayName: callingUser.name,
-      bio: "",
-      website: "",
-      birthday: "",
-      gender: "",
-      location: "",
-      relationshipStatus: "",
-      interests: "",
-      hobbies: "",
-      favMovies: "",
-      favSongs: "",
-      education: "",
-      thoughts: "",
-    };
-    return (
-      <CallScreen
-        mode="voice"
-        otherProfile={fakeProfile as any}
-        onEnd={() => setCallingUser(null)}
-      />
-    );
-  }
+  const handleCallUser = (principal: Principal, _name: string) => {
+    if (onInitCall) {
+      onInitCall(principal, "voice");
+    } else {
+      const calleePid = principal.toString();
+      const signal = {
+        callId: `call_${Date.now()}`,
+        callerPrincipal: myPrincipalStr,
+        mode: "voice" as const,
+        ts: Date.now(),
+      };
+      localStorage.setItem(
+        `sf_call_signal_${calleePid}`,
+        JSON.stringify(signal),
+      );
+      setTimeout(
+        () => localStorage.removeItem(`sf_call_signal_${calleePid}`),
+        45000,
+      );
+    }
+  };
 
   const coupleSection = otherProfiles.slice(
     0,
@@ -238,7 +239,7 @@ export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
                     onAccept={handleAccept}
                     onDecline={handleDecline}
                     onMessage={onMessageUser}
-                    onCall={setCallingUser}
+                    onCall={handleCallUser}
                     acceptPending={acceptRequest.isPending}
                   />
                 </motion.div>
@@ -276,7 +277,7 @@ export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
                           onAccept={handleAccept}
                           onDecline={handleDecline}
                           onMessage={onMessageUser}
-                          onCall={setCallingUser}
+                          onCall={handleCallUser}
                           acceptPending={acceptRequest.isPending}
                         />
                       </motion.div>
@@ -317,7 +318,7 @@ export default function RequestsTab({ onUserClick, onMessageUser }: Props) {
                           onAccept={handleAccept}
                           onDecline={handleDecline}
                           onMessage={onMessageUser}
-                          onCall={setCallingUser}
+                          onCall={handleCallUser}
                           acceptPending={acceptRequest.isPending}
                         />
                       </motion.div>
@@ -366,7 +367,7 @@ function RequestCard({
   onAccept: (p: Principal) => void;
   onDecline: (p: Principal) => void;
   onMessage?: (p: Principal) => void;
-  onCall: (u: { name: string }) => void;
+  onCall: (principal: Principal, name: string) => void;
   acceptPending: boolean;
 }) {
   return (
@@ -452,7 +453,7 @@ function RequestCard({
         <Button
           data-ocid={`requests.cancel_button.${idx + 1}`}
           size="sm"
-          onClick={() => onCall({ name: profile.displayName })}
+          onClick={() => onCall(principal, profile.displayName)}
           className="flex-1 h-8 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs gap-1.5"
           variant="ghost"
         >
